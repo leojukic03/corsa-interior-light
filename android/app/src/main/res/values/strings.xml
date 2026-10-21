@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Interior Light</string>
+    <string name="a11y_label">Interior Light – glasnoća na TID</string>
+    <string name="a11y_desc">Čita glasnoću iz prozorčića za glasnoću headunita i šalje je na TID. Ne čita ništa drugo i ništa ne šalje izvan auta.</string>
+</resources>

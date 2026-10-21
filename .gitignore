@@ -1,0 +1,23 @@
+# Android / Gradle build
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.iml
+
+# Gotovi APK-ovi idu u GitHub Releases, ne u kod
+*.apk
+
+# Backup starog programa s Una (osobno, nije dio projekta)
+backup/
+
+# Arduino build
+arduino/**/build/
+
+# Sustav
+.DS_Store
+Thumbs.db
+
+# Zipovi s izdanjima i backupom
+*.zip

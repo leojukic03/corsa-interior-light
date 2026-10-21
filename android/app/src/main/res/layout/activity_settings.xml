@@ -1,0 +1,275 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0.2"
+        android:importantForAccessibility="no"
+        android:scaleType="centerCrop"
+        android:src="@drawable/interior" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="16dp">
+
+            <!-- LIJEVO: dozvole, prikaz, tekstovi -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnBack"
+                        style="@style/Btn"
+                        android:text="‹ Natrag" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
+                        android:text="Postavke"
+                        android:textSize="26sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <TextView
+                    style="@style/Label"
+                    android:text="DOZVOLE" />
+
+                <TextView
+                    android:id="@+id/accessState"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="15sp" />
+
+                <Button
+                    android:id="@+id/btnAccess"
+                    style="@style/Btn"
+                    android:layout_width="match_parent"
+                    android:layout_marginTop="6dp"
+                    android:text="Čitanje medija (pjesma) – otvori postavke" />
+
+                <TextView
+                    android:id="@+id/a11yState"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:textSize="15sp" />
+
+                <Button
+                    android:id="@+id/btnA11y"
+                    style="@style/Btn"
+                    android:layout_width="match_parent"
+                    android:layout_marginTop="6dp"
+                    android:text="Čitanje glasnoće – otvori Pristupačnost" />
+                <TextView
+                    style="@style/Label"
+                    android:text="PRIKAZ I EFEKTI" />
+
+                <Switch
+                    android:id="@+id/swSong"
+                    style="@style/Sw"
+                    android:text="Pjesma i izvođač na TID-u" />
+
+                <Switch
+                    android:id="@+id/swStation"
+                    style="@style/Sw"
+                    android:text="Radio stanica na TID-u" />
+
+                <Switch
+                    android:id="@+id/swVolume"
+                    style="@style/Sw"
+                    android:text="Glasnoća na TID-u (VOL + bar)" />
+
+                <Switch
+                    android:id="@+id/swLedMsg"
+                    style="@style/Sw"
+                    android:text="Poruke za LED (LED RED…)" />
+
+                <Switch
+                    android:id="@+id/swReact"
+                    style="@style/Sw"
+                    android:text="LED reagira na glasnoću i novu pjesmu" />
+
+                <TextView
+                    style="@style/Label"
+                    android:text="TEKST KAD NIŠTA NE SVIRA" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <EditText
+                        android:id="@+id/idleText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:imeOptions="actionDone"
+                        android:inputType="textCapCharacters"
+                        android:maxLength="10"
+                        android:singleLine="true" />
+
+                    <Button
+                        android:id="@+id/btnIdle"
+                        style="@style/Btn"
+                        android:layout_marginStart="8dp"
+                        android:text="Spremi" />
+                </LinearLayout>
+
+                <TextView
+                    style="@style/Label"
+                    android:text="WELCOME PORUKA (KOD PALJENJA)" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <EditText
+                        android:id="@+id/welcome1"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="1. tekst"
+                        android:inputType="textCapCharacters"
+                        android:maxLength="10"
+                        android:singleLine="true" />
+
+                    <EditText
+                        android:id="@+id/welcome2"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:hint="2. tekst (ime)"
+                        android:imeOptions="actionDone"
+                        android:inputType="textCapCharacters"
+                        android:maxLength="10"
+                        android:singleLine="true" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnWelcomeSave"
+                        style="@style/Btn"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:text="Spremi" />
+
+                    <Button
+                        android:id="@+id/btnWelcomeTest"
+                        style="@style/Btn"
+                        android:layout_width="0dp"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:text="Spremi i probaj" />
+                </LinearLayout>
+
+                <TextView
+                    style="@style/Label"
+                    android:text="POČETNA ANIMACIJA" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Tekst na TID-u"
+                    android:textColor="@color/muted" />
+
+                <Spinner
+                    android:id="@+id/spTidAnim"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="LED traka"
+                    android:textColor="@color/muted" />
+
+                <Spinner
+                    android:id="@+id/spLedAnim"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp" />
+
+                <Button
+                    android:id="@+id/btnAnimTest"
+                    style="@style/Btn"
+                    android:layout_width="match_parent"
+                    android:layout_marginTop="8dp"
+                    android:text="▶  Probaj početnu animaciju" />
+            </LinearLayout>
+
+            <!-- DESNO: dijagnostika -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    style="@style/Label"
+                    android:layout_marginTop="0dp"
+                    android:text="DIJAGNOSTIKA" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnTest"
+                        style="@style/Btn"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:text="Test Arduina i TID-a" />
+
+                    <Button
+                        android:id="@+id/btnRelearn"
+                        style="@style/Btn"
+                        android:layout_width="0dp"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:text="Ponovo nauči glasnoću" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/diag"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:fontFamily="monospace"
+                    android:textColor="@color/muted"
+                    android:textIsSelectable="true"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</FrameLayout>

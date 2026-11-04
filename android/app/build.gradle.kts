@@ -8,12 +8,11 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        // Beta je posebna aplikacija ("Interior Light Beta"), instalira se pored stabilne 2.x
-        applicationId = "hr.leo.corsalight.beta"
+        applicationId = "hr.leo.corsalight"
         minSdk = 21
         targetSdk = 33
         versionCode = 13
-        versionName = "3.0-beta3"
+        versionName = "3.0"
     }
 
     buildTypes {

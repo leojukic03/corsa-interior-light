@@ -1,4 +1,4 @@
-﻿#include "TID10.h"
+#include "TID10.h"
 
 // Iste vrijednosti kao u originalnoj TID12_10 biblioteci (rade na Nano/ATmega328p)
 #define TID_DELAY 150
@@ -33,7 +33,7 @@ bool TID10::waitLevel(byte pin, byte level, unsigned long timeoutUs) {
   return true;
 }
 
-// ---- open-drain nacin (linije se puÅ¡taju, TID ih diÅ¾e; Äeka se da TID pusti SCL) ----
+// ---- open-drain nacin (linije se puštaju, TID ih diže; čeka se da TID pusti SCL) ----
 static void odLow(byte p) { digitalWrite(p, LOW); pinMode(p, OUTPUT); }
 static void odRelease(byte p) { pinMode(p, INPUT); }
 

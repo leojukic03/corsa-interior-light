@@ -1,4 +1,4 @@
-﻿package hr.leo.corsalight
+package hr.leo.corsalight
 
 import android.app.Activity
 import android.os.Bundle
@@ -49,7 +49,7 @@ class SettingsActivity : Activity() {
             Prefs.idleText = TextUtil.forTid(idle.text.toString(), 10).ifEmpty { "OPEL CORSA" }
             idle.setText(Prefs.idleText)
             Hub.send("I${Prefs.idleText}")
-            Toast.makeText(this, "Spremljeno", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show()
         }
         findViewById<Button>(R.id.btnIdle).setOnClickListener { saveIdle() }
         idle.setOnEditorActionListener { _, action, _ ->
@@ -72,7 +72,7 @@ class SettingsActivity : Activity() {
         }
         findViewById<Button>(R.id.btnWelcomeSave).setOnClickListener {
             saveWelcome()
-            Toast.makeText(this, "Spremljeno", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show()
         }
         findViewById<Button>(R.id.btnWelcomeTest).setOnClickListener {
             saveWelcome()
@@ -85,7 +85,7 @@ class SettingsActivity : Activity() {
 
         bindSpinner(
             R.id.spTidAnim,
-            listOf("Pojavi se", "Uklizi", "Prolazi (pozdrav izlazi, ime ulazi)", "Slovo po slovo", "Iz sredine", "Treptanje"),
+            listOf("Appear", "Slide in", "Pass through", "Typewriter", "From centre", "Blink"),
             Prefs.welcomeStyle,
         ) {
             Prefs.welcomeStyle = it
@@ -93,7 +93,7 @@ class SettingsActivity : Activity() {
         }
         bindSpinner(
             R.id.spLedAnim,
-            listOf("S rubova prema sredini", "Lagano paljenje", "Klizi s lijeva", "Iskrice"),
+            listOf("From the edges", "Fade in", "Sweep", "Sparkle"),
             Prefs.ledWelcomeStyle,
         ) {
             Prefs.ledWelcomeStyle = it
@@ -101,7 +101,7 @@ class SettingsActivity : Activity() {
         }
         findViewById<Button>(R.id.btnAnimTest).setOnClickListener {
             if (!Hub.connected) {
-                Toast.makeText(this, "Arduino nije spojen", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Arduino not connected", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             Hub.send("W")
@@ -109,20 +109,20 @@ class SettingsActivity : Activity() {
 
         findViewById<Button>(R.id.btnTest).setOnClickListener {
             if (!Hub.connected) {
-                Toast.makeText(this, "Arduino nije spojen", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Arduino not connected", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            Hub.log("Test: Å¡aljem D i T Arduinuâ€¦")
+            Hub.log("Test: sending D and T to the Arduino…")
             Hub.send("D")
             Hub.send("T")
         }
         findViewById<Button>(R.id.btnRelearn).setOnClickListener {
             val r = VolumeReader.instance
             if (r == null) {
-                Toast.makeText(this, "Prvo ukljuÄi Äitanje glasnoÄ‡e (PristupaÄnost)", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Turn on volume reading first (Accessibility)", Toast.LENGTH_LONG).show()
             } else {
                 r.relearn()
-                Toast.makeText(this, "Sad jednom promijeni glasnoÄ‡u", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Now change the volume once", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -141,20 +141,20 @@ class SettingsActivity : Activity() {
     private fun render() {
         val media = Perms.hasMedia(this)
         val vol = Perms.hasVolume(this)
-        accessState.text = if (media) "âœ“ ÄŒitanje medija: ukljuÄeno" else "âœ— ÄŒitanje medija: iskljuÄeno"
+        accessState.text = if (media) "✓ Media access: on" else "✗ Media access: off"
         accessState.setTextColor(if (media) 0xFF7CFFB2.toInt() else 0xFFFFB27C.toInt())
         a11yState.text = when {
-            !vol -> "âœ— ÄŒitanje glasnoÄ‡e: iskljuÄeno"
-            VolumeReader.instance == null -> "â€¦ ÄŒitanje glasnoÄ‡e: ukljuÄeno, Äeka pokretanje"
-            Prefs.volumePkg.isEmpty() -> "âœ“ ÄŒitanje glasnoÄ‡e: radi â€“ promijeni glasnoÄ‡u da je nauÄi"
-            else -> "âœ“ ÄŒitanje glasnoÄ‡e: radi (${Prefs.volumePkg})"
+            !vol -> "✗ Volume reading: off"
+            VolumeReader.instance == null -> "… Volume reading: on, waiting to start"
+            Prefs.volumePkg.isEmpty() -> "✓ Volume reading: running – change the volume so it can learn it"
+            else -> "✓ Volume reading: running (${Prefs.volumePkg})"
         }
         a11yState.setTextColor(if (vol) 0xFF7CFFB2.toInt() else 0xFFFFB27C.toInt())
 
-        val head = "Media: ${if (media) "DA" else "NE"} (listener ${if (MediaListener.instance != null) "radi" else "ne radi"})   " +
-            "GlasnoÄ‡a: ${if (VolumeReader.instance != null) "radi" else "ne radi"}\n" +
-            "Izvor: ${Hub.nowSource.ifEmpty { "-" }} (${Hub.nowVia.ifEmpty { "-" }})   " +
-            "Zadnja glasnoÄ‡a: ${if (Hub.volume >= 0) "${Hub.volume}/${Hub.volumeMax}" else "-"}\n\n"
+        val head = "Media: ${if (media) "YES" else "NO"} (listener ${if (MediaListener.instance != null) "running" else "not running"})   " +
+            "Volume: ${if (VolumeReader.instance != null) "running" else "not running"}\n" +
+            "Source: ${Hub.nowSource.ifEmpty { "-" }} (${Hub.nowVia.ifEmpty { "-" }})   " +
+            "Last volume: ${if (Hub.volume >= 0) "${Hub.volume}/${Hub.volumeMax}" else "-"}\n\n"
         diag.text = head + Hub.diag.joinToString("\n")
     }
 

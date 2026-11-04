@@ -19,19 +19,19 @@ object Perms {
 
     fun openMedia(ctx: Context) = open(
         ctx, "android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS",
-        "cmd notification allow_listener ${ctx.packageName}/.MediaListener",
+        "cmd notification allow_listener ${ctx.packageName}/hr.leo.corsalight.MediaListener",
     )
 
     fun openVolume(ctx: Context) = open(
         ctx, Settings.ACTION_ACCESSIBILITY_SETTINGS,
-        "settings put secure enabled_accessibility_services ${ctx.packageName}/.VolumeReader",
+        "settings put secure enabled_accessibility_services ${ctx.packageName}/hr.leo.corsalight.VolumeReader",
     )
 
     private fun open(ctx: Context, action: String, adb: String) {
         try {
             ctx.startActivity(Intent(action))
         } catch (e: Exception) {
-            Toast.makeText(ctx, "Headunit nema taj izbornik. Preko ADB-a:\n$adb", Toast.LENGTH_LONG).show()
+            Toast.makeText(ctx, "The head unit has no such menu. Use ADB:\n$adb", Toast.LENGTH_LONG).show()
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -40,20 +40,20 @@
                     <Button
                         android:id="@+id/btnBack"
                         style="@style/Btn"
-                        android:text="‹ Natrag" />
+                        android:text="‹ Back" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="16dp"
-                        android:text="Postavke"
+                        android:text="Settings"
                         android:textSize="26sp"
                         android:textStyle="bold" />
                 </LinearLayout>
 
                 <TextView
                     style="@style/Label"
-                    android:text="DOZVOLE" />
+                    android:text="PERMISSIONS" />
 
                 <TextView
                     android:id="@+id/accessState"
@@ -66,7 +66,7 @@
                     style="@style/Btn"
                     android:layout_width="match_parent"
                     android:layout_marginTop="6dp"
-                    android:text="Čitanje medija (pjesma) – otvori postavke" />
+                    android:text="Media access (song) – open settings" />
 
                 <TextView
                     android:id="@+id/a11yState"
@@ -80,39 +80,39 @@
                     style="@style/Btn"
                     android:layout_width="match_parent"
                     android:layout_marginTop="6dp"
-                    android:text="Čitanje glasnoće – otvori Pristupačnost" />
+                    android:text="Volume reading – open Accessibility" />
                 <TextView
                     style="@style/Label"
-                    android:text="PRIKAZ I EFEKTI" />
+                    android:text="DISPLAY AND EFFECTS" />
 
                 <Switch
                     android:id="@+id/swSong"
                     style="@style/Sw"
-                    android:text="Pjesma i izvođač na TID-u" />
+                    android:text="Song and artist on the TID" />
 
                 <Switch
                     android:id="@+id/swStation"
                     style="@style/Sw"
-                    android:text="Radio stanica na TID-u" />
+                    android:text="Radio station on the TID" />
 
                 <Switch
                     android:id="@+id/swVolume"
                     style="@style/Sw"
-                    android:text="Glasnoća na TID-u (VOL + bar)" />
+                    android:text="Volume on the TID (VOL + bar)" />
 
                 <Switch
                     android:id="@+id/swLedMsg"
                     style="@style/Sw"
-                    android:text="Poruke za LED (LED RED…)" />
+                    android:text="LED messages (LED RED…)" />
 
                 <Switch
                     android:id="@+id/swReact"
                     style="@style/Sw"
-                    android:text="LED reagira na glasnoću i novu pjesmu" />
+                    android:text="LED reacts to volume and new song" />
 
                 <TextView
                     style="@style/Label"
-                    android:text="TEKST KAD NIŠTA NE SVIRA" />
+                    android:text="TEXT WHEN NOTHING IS PLAYING" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -133,12 +133,12 @@
                         android:id="@+id/btnIdle"
                         style="@style/Btn"
                         android:layout_marginStart="8dp"
-                        android:text="Spremi" />
+                        android:text="Save" />
                 </LinearLayout>
 
                 <TextView
                     style="@style/Label"
-                    android:text="WELCOME PORUKA (KOD PALJENJA)" />
+                    android:text="WELCOME MESSAGE (AT START-UP)" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -150,7 +150,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:hint="1. tekst"
+                        android:hint="1st text"
                         android:inputType="textCapCharacters"
                         android:maxLength="10"
                         android:singleLine="true" />
@@ -161,7 +161,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
                         android:layout_weight="1"
-                        android:hint="2. tekst (ime)"
+                        android:hint="2nd text (name)"
                         android:imeOptions="actionDone"
                         android:inputType="textCapCharacters"
                         android:maxLength="10"
@@ -179,7 +179,7 @@
                         style="@style/Btn"
                         android:layout_width="0dp"
                         android:layout_weight="1"
-                        android:text="Spremi" />
+                        android:text="Save" />
 
                     <Button
                         android:id="@+id/btnWelcomeTest"
@@ -187,17 +187,17 @@
                         android:layout_width="0dp"
                         android:layout_marginStart="8dp"
                         android:layout_weight="1"
-                        android:text="Spremi i probaj" />
+                        android:text="Save and try" />
                 </LinearLayout>
 
                 <TextView
                     style="@style/Label"
-                    android:text="POČETNA ANIMACIJA" />
+                    android:text="WELCOME ANIMATION" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Tekst na TID-u"
+                    android:text="Text on the TID"
                     android:textColor="@color/muted" />
 
                 <Spinner
@@ -209,7 +209,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="LED traka"
+                    android:text="LED strip"
                     android:textColor="@color/muted" />
 
                 <Spinner
@@ -222,7 +222,7 @@
                     style="@style/Btn"
                     android:layout_width="match_parent"
                     android:layout_marginTop="8dp"
-                    android:text="▶  Probaj početnu animaciju" />
+                    android:text="▶  Try the welcome animation" />
             </LinearLayout>
 
             <!-- DESNO: dijagnostika -->
@@ -237,7 +237,7 @@
                 <TextView
                     style="@style/Label"
                     android:layout_marginTop="0dp"
-                    android:text="DIJAGNOSTIKA" />
+                    android:text="DIAGNOSTICS" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -249,7 +249,7 @@
                         style="@style/Btn"
                         android:layout_width="0dp"
                         android:layout_weight="1"
-                        android:text="Test Arduina i TID-a" />
+                        android:text="Test Arduino and TID" />
 
                     <Button
                         android:id="@+id/btnRelearn"
@@ -257,7 +257,7 @@
                         android:layout_width="0dp"
                         android:layout_marginStart="8dp"
                         android:layout_weight="1"
-                        android:text="Ponovo nauči glasnoću" />
+                        android:text="Relearn volume" />
                 </LinearLayout>
 
                 <TextView

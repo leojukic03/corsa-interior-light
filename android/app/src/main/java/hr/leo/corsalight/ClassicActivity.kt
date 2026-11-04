@@ -1,4 +1,4 @@
-﻿package hr.leo.corsalight
+package hr.leo.corsalight
 
 import android.app.Activity
 import android.content.ComponentName
@@ -25,14 +25,14 @@ class ClassicActivity : Activity() {
 
     // Iste boje kao u staroj aplikaciji (omjeri iz starog Arduino koda), plus bijela
     private val colors = listOf(
-        LedColor("RED", "Crvena", 255, 0, 0),
-        LedColor("ORANGE", "Narančasta", 255, 128, 0),
-        LedColor("YELLOW", "Žuta", 255, 255, 0),
-        LedColor("GREEN", "Zelena", 0, 255, 0),
-        LedColor("BLUE", "Plava", 0, 0, 255),
-        LedColor("VIOLET", "Ljubičasta", 128, 0, 255),
+        LedColor("RED", "Red", 255, 0, 0),
+        LedColor("ORANGE", "Orange", 255, 128, 0),
+        LedColor("YELLOW", "Yellow", 255, 255, 0),
+        LedColor("GREEN", "Green", 0, 255, 0),
+        LedColor("BLUE", "Blue", 0, 0, 255),
+        LedColor("VIOLET", "Violet", 128, 0, 255),
         LedColor("INDIGO", "Indigo", 255, 0, 255),
-        LedColor("WHITE", "Bijela", 255, 255, 255),
+        LedColor("WHITE", "White", 255, 255, 255),
     )
     private val colorButtons = mutableListOf<Pair<LedColor, View>>()
 
@@ -186,24 +186,24 @@ class ClassicActivity : Activity() {
     }
 
     private fun render() {
-        status.text = if (Hub.connected) "● Arduino spojen  (${Hub.usbInfo})" else "○ Arduino nije spojen — uključi USB"
+        status.text = if (Hub.connected) "● Arduino connected  (${Hub.usbInfo})" else "○ Arduino not connected — plug in USB"
         status.setTextColor(if (Hub.connected) 0xFF7CFFB2.toInt() else 0xFFFFB27C.toInt())
 
         nowText.text = Hub.nowText.ifEmpty { Prefs.idleText }
-        volumeText.text = if (Hub.volume >= 0) "Glasnoća: ${Hub.volume} / ${Hub.volumeMax}" else ""
+        volumeText.text = if (Hub.volume >= 0) "Volume: ${Hub.volume} / ${Hub.volumeMax}" else ""
 
         val missing = listOfNotNull(
-            if (!Perms.hasMedia(this)) "čitanje medija" else null,
-            if (!Perms.hasVolume(this)) "čitanje glasnoće" else null,
+            if (!Perms.hasMedia(this)) "media access" else null,
+            if (!Perms.hasVolume(this)) "volume reading" else null,
         )
         warn.visibility = if (missing.isEmpty()) View.GONE else View.VISIBLE
-        warn.text = "Isključeno: ${missing.joinToString(", ")} – uključi u Postavkama"
+        warn.text = "Off: ${missing.joinToString(", ")} – turn on in Settings"
 
-        btnPower.text = if (Prefs.power) "Svjetlo: UPALJENO" else "Svjetlo: UGAŠENO"
+        btnPower.text = if (Prefs.power) "Light: ON" else "Light: OFF"
         btnPower.isActivated = Prefs.power
         btnStatic.isActivated = Prefs.mode == 0
         btnStar.isActivated = Prefs.mode == 1
-        brightLabel.text = "SVJETLINA  ${Prefs.brightness}%"
+        brightLabel.text = "BRIGHTNESS  ${Prefs.brightness}%"
 
         for ((c, v) in colorButtons) v.background = colorBg(c, c.name == Prefs.colorName)
 

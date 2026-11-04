@@ -116,7 +116,7 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
         }
         val conn = usb.openDevice(dev)
         if (conn == null) {
-            Hub.log("USB: ne mogu otvoriti ${dev.deviceName}")
+            Hub.log("USB: cannot open ${dev.deviceName}")
             return
         }
         try {
@@ -127,12 +127,12 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
             io = SerialInputOutputManager(p, this).also { it.start() }
             Hub.usbInfo = "${driver.javaClass.simpleName.removeSuffix("Driver")} %04X:%04X".format(dev.vendorId, dev.productId)
             Hub.connected = true
-            Hub.log("USB spojen: ${Hub.usbInfo}")
+            Hub.log("USB connected: ${Hub.usbInfo}")
             updateNotification()
             // Nano se resetira kad se port otvori: pricekaj bootloader pa posalji sve postavke
             handler.postDelayed({ syncAll() }, 2500)
         } catch (e: Exception) {
-            Hub.log("USB greska: ${e.message}")
+            Hub.log("USB error: ${e.message}")
             try {
                 conn.close()
             } catch (_: Exception) {
@@ -152,7 +152,7 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
         port = null
         if (was) {
             Hub.connected = false
-            Hub.log("USB odspojen")
+            Hub.log("USB disconnected")
             updateNotification()
         }
     }
@@ -169,7 +169,7 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
                 p.write((cmd + "\n").toByteArray(Charsets.ISO_8859_1), 500)
             } catch (e: Exception) {
                 handler.post {
-                    Hub.log("Slanje nije uspjelo: ${e.message}")
+                    Hub.log("Send failed: ${e.message}")
                     disconnect()
                 }
             }
@@ -200,7 +200,7 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
             when (i.action) {
                 ACTION_USB_PERMISSION ->
                     if (i.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) tryConnect()
-                    else Hub.log("USB dozvola odbijena")
+                    else Hub.log("USB permission denied")
                 UsbManager.ACTION_USB_DEVICE_ATTACHED -> tryConnect()
                 UsbManager.ACTION_USB_DEVICE_DETACHED -> {
                     permissionAsked = false
@@ -216,7 +216,7 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
         override fun onReceive(c: Context, i: Intent) {
             val type = i.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", -1)
             val value = i.getIntExtra("android.media.EXTRA_VOLUME_STREAM_VALUE", -1)
-            Hub.log("Glasnoća kanal $type = $value")
+            Hub.log("Volume stream $type = $value")
             if (type != AudioManager.STREAM_MUSIC) return
             val v = i.getIntExtra("android.media.EXTRA_VOLUME_STREAM_VALUE", audio.getStreamVolume(AudioManager.STREAM_MUSIC))
             Hub.onVolume(v, audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
@@ -240,7 +240,7 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
             } catch (_: Exception) {
                 "?"
             }
-            Hub.log("Postavka $table/$key = ${value?.take(60)}")
+            Hub.log("Setting $table/$key = ${value?.take(60)}")
             Hub.onVolume(audio.getStreamVolume(AudioManager.STREAM_MUSIC), audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
         }
     }
@@ -268,14 +268,14 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
     private fun buildNotification(): Notification {
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= 26) {
-            nm.createNotificationChannel(NotificationChannel(CHANNEL, "Veza s Arduinom", NotificationManager.IMPORTANCE_MIN))
+            nm.createNotificationChannel(NotificationChannel(CHANNEL, "Arduino connection", NotificationManager.IMPORTANCE_MIN))
         }
         val piFlags = if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), piFlags)
         val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CHANNEL) else Notification.Builder(this)
         return b.setSmallIcon(R.drawable.ic_stat)
             .setContentTitle(getString(R.string.app_name))
-            .setContentText(if (Hub.connected) "Arduino spojen" else "Čekam Arduino (USB)…")
+            .setContentText(if (Hub.connected) "Arduino connected" else "Waiting for Arduino (USB)…")
             .setContentIntent(open)
             .setOngoing(true)
             .build()

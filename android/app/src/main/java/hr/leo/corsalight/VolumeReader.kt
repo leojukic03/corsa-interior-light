@@ -1,4 +1,4 @@
-﻿package hr.leo.corsalight
+package hr.leo.corsalight
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
@@ -58,8 +58,8 @@ class VolumeReader : AccessibilityService() {
         Prefs.init(this)
         instance = this
         Hub.screenVolume = true
-        Hub.log("PristupaÄnost spojena (Äitanje glasnoÄ‡e)" +
-            if (Prefs.volumePkg.isNotEmpty()) ", izvor: ${Prefs.volumePkg}" else ", Äekam prvu promjenu glasnoÄ‡e")
+        Hub.log("Accessibility connected (volume reading)" +
+            if (Prefs.volumePkg.isNotEmpty()) ", source: ${Prefs.volumePkg}" else ", waiting for the first volume change")
         LinkService.start(this)
     }
 
@@ -91,7 +91,7 @@ class VolumeReader : AccessibilityService() {
     fun relearn() {
         Prefs.volumePkg = ""
         candidateLogs = 0
-        Hub.log("GlasnoÄ‡a: zaboravio izvor, Äekam iduÄ‡u promjenu glasnoÄ‡e")
+        Hub.log("Volume: source forgotten, waiting for the next volume change")
     }
 
     /** Vraca true ako je nasao glasnocu u prozoru tog paketa. Uvijek svjezi podaci: cache drzi staru glasnocu. */
@@ -108,12 +108,12 @@ class VolumeReader : AccessibilityService() {
             val learned = Prefs.volumePkg
             if (learned.isEmpty()) {
                 if (!r.strong) {
-                    if (candidateLogs++ < 20) Hub.log("PristupaÄnost kandidat $pkg: ${r.info}")
+                    if (candidateLogs++ < 20) Hub.log("Accessibility candidate $pkg: ${r.info}")
                     continue
                 }
                 Prefs.volumePkg = pkg
                 Prefs.volumeMax = r.max
-                Hub.log("GlasnoÄ‡a: nauÄio izvor $pkg (max ${r.max})")
+                Hub.log("Volume: learned source $pkg (max ${r.max})")
             }
             val max = if (r.max > 0) r.max else Prefs.volumeMax
             if (r.max > 0 && r.max != Prefs.volumeMax) Prefs.volumeMax = r.max
@@ -150,7 +150,7 @@ class VolumeReader : AccessibilityService() {
             for (i in 0 until n.childCount) n.getChild(i)?.let { queue.add(it) }
         }
         if (seekVal < 0 && numbers.isEmpty()) return null
-        val info = "klizaÄ=${if (seekVal >= 0) "$seekVal/$seekMax" else "-"} brojevi=$numbers"
+        val info = "slider=${if (seekVal >= 0) "$seekVal/$seekMax" else "-"} numbers=$numbers"
         return when {
             seekVal >= 0 && seekVal in numbers -> Reading(seekVal, seekMax, true, info)
             seekVal >= 0 -> Reading(seekVal, seekMax, false, info)

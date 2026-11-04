@@ -41,9 +41,9 @@ class MediaListener : NotificationListenerService() {
         try {
             m.addOnActiveSessionsChangedListener(sessionsListener, cn, handler)
             updateSessions(m.getActiveSessions(cn))
-            Hub.log("Media listener spojen")
+            Hub.log("Media listener connected")
         } catch (e: SecurityException) {
-            Hub.log("Nema dozvole za medije: ${e.message}")
+            Hub.log("No media permission: ${e.message}")
         }
         // radio aplikacije koje vec imaju obavijest
         try {
@@ -57,7 +57,7 @@ class MediaListener : NotificationListenerService() {
         controllers.values.forEach { (c, cb) -> c.unregisterCallback(cb) }
         controllers.clear()
         if (instance === this) instance = null
-        Hub.log("Media listener odspojen")
+        Hub.log("Media listener disconnected")
     }
 
     private fun updateSessions(list: List<MediaController>) {
@@ -78,17 +78,17 @@ class MediaListener : NotificationListenerService() {
             c.registerCallback(cb, handler)
             controllers[c.sessionToken] = c to cb
         }
-        Hub.log("Sesije: " + list.joinToString {
+        Hub.log("Sessions: " + list.joinToString {
             "${it.packageName}(${stateName(it.playbackState?.state)}) [${describe(it.metadata)}]"
-        }.ifEmpty { "nema" })
+        }.ifEmpty { "none" })
         evaluate()
     }
 
     private fun describe(md: MediaMetadata?): String {
-        if (md == null) return "bez podataka"
+        if (md == null) return "no data"
         val t = md.getString(MediaMetadata.METADATA_KEY_TITLE) ?: md.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
         val a = md.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: md.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE)
-        return "naslov=$t izvodjac=$a"
+        return "title=$t artist=$a"
     }
 
     private fun hasTitle(c: MediaController): Boolean {
@@ -120,7 +120,7 @@ class MediaListener : NotificationListenerService() {
         if (pkg != packageName) {
             // dijagnostika: svaka obavijest, da vidimo kako se zove radio aplikacija na headunitu
             val ex0 = sbn.notification.extras
-            Hub.log("Obavijest $pkg: ${ex0.getCharSequence(Notification.EXTRA_TITLE)} | ${ex0.getCharSequence(Notification.EXTRA_TEXT)}")
+            Hub.log("Notification $pkg: ${ex0.getCharSequence(Notification.EXTRA_TITLE)} | ${ex0.getCharSequence(Notification.EXTRA_TEXT)}")
         }
         if (!Hub.isRadio(pkg)) return
         if (controllers.values.any { it.first.packageName == pkg }) return  // ima sesiju, ona je bolja
@@ -135,10 +135,10 @@ class MediaListener : NotificationListenerService() {
     }
 
     private fun stateName(s: Int?) = when (s) {
-        PlaybackState.STATE_PLAYING -> "svira"
-        PlaybackState.STATE_PAUSED -> "pauza"
-        PlaybackState.STATE_STOPPED -> "stop"
-        PlaybackState.STATE_BUFFERING -> "buffer"
+        PlaybackState.STATE_PLAYING -> "playing"
+        PlaybackState.STATE_PAUSED -> "paused"
+        PlaybackState.STATE_STOPPED -> "stopped"
+        PlaybackState.STATE_BUFFERING -> "buffering"
         null -> "?"
         else -> s.toString()
     }

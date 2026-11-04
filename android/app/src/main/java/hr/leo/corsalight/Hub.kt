@@ -1,4 +1,4 @@
-﻿package hr.leo.corsalight
+package hr.leo.corsalight
 
 import android.os.Handler
 import android.os.Looper

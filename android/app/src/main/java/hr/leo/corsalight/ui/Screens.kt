@@ -174,7 +174,7 @@ abstract class Screen(protected val host: UiHost) {
         et.setSelection(et.text.length)
         AlertDialog.Builder(ctx, android.R.style.Theme_Material_Dialog_Alert)
             .setTitle(title)
-            .setMessage("Najviše $maxLen znakova (TID)")
+            .setMessage("Up to $maxLen characters (TID)")
             .setView(et)
             .setPositiveButton("OK") { _, _ -> onDone(et.text.toString().trim()) }
             .setNegativeButton("Cancel", null)
@@ -595,7 +595,7 @@ class DebugScreen(host: UiHost) : Screen(host) {
         header(d, "OAI Debugging")
         button(d, "Test OAI and TID", 210, 200, 670, 110) {
             if (!Hub.connected) notAvailable() else {
-                Hub.log("Test: šaljem D i T Arduinu…")
+                Hub.log("Test: sending D and T to the Arduino…")
                 Hub.send("D")
                 Hub.send("T")
             }

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Interior Light</string>
-    <string name="a11y_label">Interior Light – glasnoća na TID</string>
-    <string name="a11y_desc">Čita glasnoću iz prozorčića za glasnoću headunita i šalje je na TID. Ne čita ništa drugo i ništa ne šalje izvan auta.</string>
+    <string name="app_name">Interior Light Beta</string>
+    <string name="a11y_label">Interior Light Beta – volume on the TID</string>
+    <string name="a11y_desc">Reads the volume from the head unit\'s volume pop-up and shows it on the TID. It reads nothing else and sends nothing outside the car.</string>
 </resources>

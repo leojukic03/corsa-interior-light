@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -48,7 +48,7 @@
 
                 <TextView
                     style="@style/Label"
-                    android:text="NA TID-u" />
+                    android:text="ON THE TID" />
 
                 <TextView
                     android:id="@+id/nowText"
@@ -82,7 +82,7 @@
                     style="@style/Btn"
                     android:layout_width="match_parent"
                     android:layout_marginTop="16dp"
-                    android:text="⚙  Postavke" />
+                    android:text="⚙  Settings" />
             </LinearLayout>
 
             <!-- DESNO: LED kontrole -->
@@ -119,7 +119,7 @@
 
                 <TextView
                     style="@style/Label"
-                    android:text="BOJA" />
+                    android:text="COLOUR" />
 
                 <LinearLayout
                     android:id="@+id/colorRow1"
@@ -136,7 +136,7 @@
 
                 <TextView
                     style="@style/Label"
-                    android:text="VLASTITA BOJA" />
+                    android:text="CUSTOM COLOUR" />
 
                 <SeekBar
                     android:id="@+id/hue"
@@ -156,7 +156,7 @@
 
                 <TextView
                     style="@style/Label"
-                    android:text="EFEKT" />
+                    android:text="EFFECT" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -169,7 +169,7 @@
                         android:layout_width="0dp"
                         android:layout_height="56dp"
                         android:layout_weight="1"
-                        android:text="Mirna boja" />
+                        android:text="Static colour" />
 
                     <Button
                         android:id="@+id/btnStar"

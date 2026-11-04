@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- tamna kockica s okvirom u plavoj iz Figme, valovi radija -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp"
+    android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="#101113" android:pathData="M4,4h40v40h-40z" />
+    <path android:strokeColor="#299BD0" android:strokeWidth="2.5" android:pathData="M5.25,5.25h37.5v37.5h-37.5z" />
+    <path android:fillColor="#D9D9D9" android:pathData="M22,27a2,2 0 1,0 4,0a2,2 0 1,0 -4,0z" />
+    <path android:strokeColor="#D9D9D9" android:strokeWidth="2.2" android:strokeLineCap="round"
+        android:pathData="M18.5,30.5a5,5 0 0,1 0,-7M29.5,23.5a5,5 0 0,1 0,7" />
+    <path android:strokeColor="#299BD0" android:strokeWidth="2.2" android:strokeLineCap="round"
+        android:pathData="M14.5,34a10,10 0 0,1 0,-14M33.5,20a10,10 0 0,1 0,14" />
+    <path android:strokeColor="#D9D9D9" android:strokeWidth="1.6" android:strokeLineCap="round"
+        android:pathData="M24,29v8" />
+</vector>

@@ -700,7 +700,7 @@ class CreditsScreen(host: UiHost) : Screen(host) {
                 taps = 0
                 Prefs.rainbowAndrija = !Prefs.rainbowAndrija
                 andrija.rainbow = Prefs.rainbowAndrija
-                if (Prefs.rainbowAndrija) Hub.send("LANDRIJA :)")
+                if (Prefs.rainbowAndrija) Hub.send("Y5000")  // 5 s duge na LED traci
             }
         }
 

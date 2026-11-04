@@ -74,6 +74,7 @@ Ako TID pokazuje prazno ispod sata, a datum nestane, provjeri **masu i kontakte*
 | `E<tekst>` / `F<tekst>` | pozdrav / ime za početnu animaciju |
 | `A0`–`A5` | stil pozdrava na TID-u |
 | `K0`–`K3` | stil LED pozdrava |
+| `Y` / `Y5000` | duga na LED traci (easter egg), bez broja 5 s |
 | `W` | pokreni početnu animaciju |
 | `D` / `T` | dijagnostika / test TID linija |
 | `Z` | pauza slanja na TID 5 s (pošalji prije snimanja novog koda) |

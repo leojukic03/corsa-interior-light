@@ -19,6 +19,7 @@
    Z                    pauza TID-a 5 s (prije snimanja koda)
    A<0-5>               stil pozdrava na TID-u: 0 pojavi se, 1 uklizi, 2 prolazi, 3 slovo po slovo, 4 iz sredine, 5 treptanje
    K<0-3>               stil LED pozdrava: 0 s rubova, 1 lagano paljenje, 2 klizi s lijeva, 3 iskrice
+   Y[ms]                duga na traci (easter egg), bez broja 5 s
    W                    ponovi welcome animaciju
    ?                    Arduino odgovori "OK CorsaLight 2"
    D                    dijagnostika (postavke, TID, brzina petlje)
@@ -103,6 +104,7 @@ unsigned long volT = 0;  // 0 = nema volume efekta
 const uint16_t VOL_HOLD = 1500, VOL_FADE = 500;
 
 bool pulse = false;
+unsigned long rainbowT = 0, rainbowMs = 0;  // easter egg: duga na traci (naredba Y)
 unsigned long pulseT = 0;
 const uint16_t PULSE_MS = 900;
 
@@ -252,6 +254,10 @@ void handleLine(char *s) {
     case 'K':
       cfg.ledWelcome = constrain(atoi(a), 0, 3);
       saveLater();
+      break;
+    case 'Y':  // duga na traci, Y<ms> (bez broja 5 s, najvise 30 s)
+      rainbowMs = *a ? constrain(atol(a), 500L, 30000L) : 5000;
+      rainbowT = millis();
       break;
     case 'W':
       startWelcome(true);  // "probaj": pokazi i TID dio, cak i ako je iskljucen
@@ -495,6 +501,24 @@ void renderLeds(unsigned long now) {
     if (volT) renderVolume(now);
     if (pulse) renderPulse(now);
   }
+  if (rainbowMs) renderRainbow(now);
+}
+
+// Easter egg (naredba Y): duga putuje po traci, na pocetku i kraju se lagano utapa
+void renderRainbow(unsigned long now) {
+  unsigned long e = now - rainbowT;
+  if (e >= rainbowMs) {
+    rainbowMs = 0;
+    return;
+  }
+  uint8_t a = 255;
+  if (e < 400) a = e * 255 / 400;
+  else if (rainbowMs - e < 600) a = (rainbowMs - e) * 255 / 600;
+  CRGB r[NUM_LEDS];
+  fill_rainbow(r, NUM_LEDS, (uint8_t)(e / 8), 255 / NUM_LEDS + 4);
+  for (uint8_t i = 0; i < NUM_LEDS; i++) leds[i] = blend(leds[i], r[i], a);
+  // i kad je svjetlo priguseno, duga se mora vidjeti
+  if (curBright < 70) FastLED.setBrightness(curBright + (uint16_t)(70 - curBright) * a / 255);
 }
 
 // ---------------- TID ----------------

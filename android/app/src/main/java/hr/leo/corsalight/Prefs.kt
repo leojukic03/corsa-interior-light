@@ -43,6 +43,7 @@ object Prefs {
     var personalWelcome by bool("personalWelcome", true)  // ime iza pozdrava
     var userName by str("userName", "Leo")            // "User Name", na TID ide velikim slovima
     var rainbowAndrija by bool("rainbowAndrija", false)  // easter egg na ekranu Credits
+    var autoUpdateFw by bool("autoUpdateFw", true)       // aplikacija sama snimi noviji Arduino kod
 
     /** Tekst koji Arduino dobiva kao drugi dio pozdrava. */
     fun welcome2ForTid(): String = if (personalWelcome) TextUtil.forTid(userName, 10) else ""

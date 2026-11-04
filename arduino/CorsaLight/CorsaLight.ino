@@ -21,7 +21,7 @@
    K<0-3>               stil LED pozdrava: 0 s rubova, 1 lagano paljenje, 2 klizi s lijeva, 3 iskrice
    Y[ms]                duga na traci (easter egg), bez broja 5 s
    W                    ponovi welcome animaciju
-   ?                    Arduino odgovori "OK CorsaLight 2"
+   ?                    Arduino odgovori "OK CorsaLight v<FW_VERSION>"
    D                    dijagnostika (postavke, TID, brzina petlje)
 
   Boja, svjetlina, ukljuceno/iskljuceno, efekt i idle tekst spremaju se u
@@ -35,6 +35,9 @@
 #define NUM_LEDS 26
 #define BAUD     9600
 #define LED_MAX_MA 450  // strujni limit za traku (USB napajanje)
+// Verzija ovog koda. Aplikacija nosi istu verziju u sebi i sama snimi Arduino
+// kad je njegova verzija starija (vidi android/.../Firmware.kt). Povecaj kod svake promjene!
+#define FW_VERSION 31
 
 TID10 tid(7, 5, 6);  // SDA -> D7, SCL -> D5, MRQ -> D6
 CRGB leds[NUM_LEDS];
@@ -263,7 +266,8 @@ void handleLine(char *s) {
       startWelcome(true);  // "probaj": pokazi i TID dio, cak i ako je iskljucen
       break;
     case '?':
-      Serial.println(F("OK CorsaLight 2"));
+      Serial.print(F("OK CorsaLight v"));
+      Serial.println(FW_VERSION);
       break;
     case 'D': {
       char d[96];
@@ -676,7 +680,8 @@ void setup() {
   tid.begin();
   randomSeed(analogRead(A0));
   startWelcome();
-  Serial.println(F("HELLO CorsaLight 2"));
+  Serial.print(F("HELLO CorsaLight v"));
+  Serial.println(FW_VERSION);
 }
 
 void loop() {

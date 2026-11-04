@@ -23,6 +23,20 @@ object Hub {
     var usbInfo = ""
 
     /** Demo nacin (dugi pritisak na Opel logo): izbornici rade i bez Arduina, npr. u emulatoru. */
+    /** Verzija Arduino koda koju je Arduino javio (-1 = jos ne znamo). */
+    var fwVersion = -1
+        set(v) {
+            field = v
+            changed()
+        }
+
+    /** Tekst za ekran dok se Arduino nadograduje ("" = ne nadograduje se). */
+    var flashState = ""
+        set(v) {
+            field = v
+            changed()
+        }
+
     var demo = false
         set(v) {
             field = v

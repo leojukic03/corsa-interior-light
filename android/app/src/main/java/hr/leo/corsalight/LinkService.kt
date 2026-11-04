@@ -46,6 +46,8 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
     private var io: SerialInputOutputManager? = null
     private var permissionAsked = false
     private val rx = StringBuilder()
+    @Volatile private var flashing = false
+    private var autoFlashTried = false  // ako automatska nadogradnja padne, ne pokusavaj u krug
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -124,7 +126,7 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
             p.open(conn)
             p.setParameters(BAUD, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
             port = p
-            io = SerialInputOutputManager(p, this).also { it.start() }
+            io = startIo(p)
             Hub.usbInfo = "${driver.javaClass.simpleName.removeSuffix("Driver")} %04X:%04X".format(dev.vendorId, dev.productId)
             Hub.connected = true
             Hub.log("USB connected: ${Hub.usbInfo}")
@@ -157,12 +159,74 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
         }
     }
 
+    private fun startIo(p: UsbSerialPort): SerialInputOutputManager {
+        val m = SerialInputOutputManager(p, this)
+        m.readTimeout = 200  // da se citanje moze zaustaviti za snimanje Arduina
+        m.start()
+        return m
+    }
+
     private fun syncAll() {
         Prefs.syncCommands().forEach { send(it) }
         send("N${Hub.nowText}")
+        send("?")  // Arduino javi verziju koda -> po potrebi nadogradnja
+    }
+
+    // ---------------- nadogradnja Arduina iz aplikacije ----------------
+
+    private fun onVersion(v: Int) {
+        Hub.fwVersion = v
+        val bundled = Firmware.bundledVersion(this)
+        if (v < bundled && Prefs.autoUpdateFw && !autoFlashTried && !flashing) {
+            autoFlashTried = true
+            Hub.log("OAI firmware v$v is older than v$bundled in the app: updating")
+            updateFirmware()
+        }
+    }
+
+    /** Snimi Arduino kodom koji aplikacija nosi. Moze i rucno iz Advanced Settings. */
+    fun updateFirmware() {
+        val p = port
+        if (p == null || flashing) return
+        flashing = true
+        Hub.flashState = "Updating OAI module…"
+        // TID ne smije dobiti reset usred poruke: Arduino pauzira TID 5 s
+        try {
+            p.write("Z\n".toByteArray(Charsets.ISO_8859_1), 500)
+        } catch (_: Exception) {
+        }
+        writer.execute {
+            var ok = false
+            try {
+                Thread.sleep(300)
+                io?.stop()
+                val until = System.currentTimeMillis() + 1500
+                while (io?.state != SerialInputOutputManager.State.STOPPED && System.currentTimeMillis() < until) Thread.sleep(20)
+                val (img, size) = Firmware.loadImage(this)
+                ok = Firmware.flash(p, img, size) { msg -> handler.post { Hub.log("Firmware: $msg"); Hub.flashState = msg } }
+            } catch (e: Exception) {
+                handler.post { Hub.log("Firmware update failed: ${e.message}") }
+            } finally {
+                try {
+                    p.setParameters(BAUD, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+                } catch (_: Exception) {
+                }
+                handler.post {
+                    flashing = false
+                    Hub.flashState = ""
+                    if (port === p) {
+                        io = startIo(p)
+                        // novi kod se pali s welcome animacijom: onda mu posalji postavke
+                        handler.postDelayed({ syncAll() }, if (ok) 2500 else 500)
+                    }
+                    Hub.log(if (ok) "OAI module updated" else "OAI module not updated (old code still running)")
+                }
+            }
+        }
     }
 
     fun send(cmd: String) {
+        if (flashing) return
         val p = port ?: return
         writer.execute {
             try {
@@ -185,6 +249,11 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
                     val line = rx.toString()
                     rx.setLength(0)
                     if (line.isNotBlank()) Hub.log("Arduino: $line")
+                    // "OK CorsaLight v31" / "HELLO CorsaLight v31"; stari kod javlja "OK CorsaLight 2"
+                    Regex("""(?:OK|HELLO) CorsaLight v?(\d+)""").find(line)?.let { m ->
+                        val v = m.groupValues[1].toInt().let { if (line.contains(" v")) it else 1 }
+                        handler.post { onVersion(v) }
+                    }
                 }
                 else -> if (rx.length < 200) rx.append(c)
             }
@@ -192,6 +261,7 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
     }
 
     override fun onRunError(e: Exception) {
+        if (flashing) return  // citanje je namjerno zaustavljeno za snimanje Arduina
         handler.post { disconnect() }
     }
 

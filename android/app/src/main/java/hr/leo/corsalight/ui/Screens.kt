@@ -557,6 +557,7 @@ class CarSetupScreen(host: UiHost) : Screen(host) {
             },
             Row.Value("Media access", { if (Perms.hasMedia(ctx)) "On" else "Off – tap" }) { Perms.openMedia(ctx) },
             Row.Value("Volume reading", { if (Perms.hasVolume(ctx)) "On" else "Off – tap" }) { Perms.openVolume(ctx) },
+            Row.Check("Auto-update OAI module", { Prefs.autoUpdateFw }) { Prefs.autoUpdateFw = it },
             Row.Action("All colours and classic screen") { ctx.startActivity(Intent(ctx, ClassicActivity::class.java)) },
         ))
     }
@@ -569,20 +570,50 @@ class CarSetupScreen(host: UiHost) : Screen(host) {
 class AdvancedScreen(host: UiHost) : Screen(host) {
     override val theme = Theme.GREEN
     private lateinit var status: GButton
+    private lateinit var fw: GButton
+    private lateinit var fwState: GText
 
     override fun build(d: DesignLayout) {
         sideGlow(d)
         header(d, "Advanced Settings")
         d.add(GText(ctx, "Opel Advanced Interior Status", 64f), 210, 265, 950, 130)
         status = d.add(GButton(ctx, "", theme), 1170, 265, 420, 130)
-        button(d, "OAI Debugging", 210, 466, 1380) { host.push(DebugScreen(host)) }
-        button(d, "Assist", 210, 666, 1380) { host.push(AssistScreen(host)) }
-        button(d, "Credits", 210, 866, 1380) { host.push(CreditsScreen(host)) }
+        d.add(GText(ctx, "OAI firmware", 64f), 210, 466, 950, 130)
+        fw = d.add(GButton(ctx, "", theme), 1170, 466, 420, 130)
+        fw.setOnClickListener { askUpdate() }
+        fwState = d.add(GText(ctx, "", 36f, plainColor = 0xFF9AA0A8.toInt()), 210, 596, 1380, 60)
+        button(d, "OAI Debugging", 210, 666, 1380) { host.push(DebugScreen(host)) }
+        button(d, "Assist", 210, 866, 670) { host.push(AssistScreen(host)) }
+        button(d, "Credits", 920, 866, 670) { host.push(CreditsScreen(host)) }
         refresh()
+    }
+
+    private fun askUpdate() {
+        val link = Hub.link
+        if (!Hub.connected || link == null) {
+            notAvailable()
+            return
+        }
+        val b = hr.leo.corsalight.Firmware.bundledVersion(ctx)
+        host.popup("Update OAI module to v$b?", "Update") { link.updateFirmware() }
     }
 
     override fun refresh() {
         status.text = if (Hub.connected) "Connected" else if (Hub.demo) "Demo" else "Disconnected"
+        val b = hr.leo.corsalight.Firmware.bundledVersion(ctx)
+        val v = Hub.fwVersion
+        fw.text = when {
+            Hub.flashState.isNotEmpty() -> "Updating…"
+            !Hub.connected || v < 0 -> "v$b in app"
+            v < b -> "v$v → v$b"
+            else -> "v$v"
+        }
+        fwState.text = when {
+            Hub.flashState.isNotEmpty() -> Hub.flashState
+            Hub.connected && v in 0 until b -> "Tap to update the OAI module from the app"
+            Hub.connected && v >= b -> "Up to date"
+            else -> ""
+        }
     }
 }
 

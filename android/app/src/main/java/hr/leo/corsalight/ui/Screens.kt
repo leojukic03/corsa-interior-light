@@ -236,7 +236,6 @@ class HomeScreen(host: UiHost) : Screen(host) {
         d.add(GText(ctx, state, 64f, Gravity.CENTER), 1054, 880, 600, 90)
 
         button(d, "Advanced Settings", 263, 1018, 1365) { host.push(AdvancedScreen(host)) }
-        d.add(GText(ctx, "Designed by Andrija Pulić", 13f), 8, 1170, 600, 26)
     }
 
     /** Ako se Arduino spoji ili odspoji, pocetni ekran mijenja boju. */
@@ -578,6 +577,7 @@ class AdvancedScreen(host: UiHost) : Screen(host) {
         status = d.add(GButton(ctx, "", theme), 1170, 265, 420, 130)
         button(d, "OAI Debugging", 210, 466, 1380) { host.push(DebugScreen(host)) }
         button(d, "Assist", 210, 666, 1380) { host.push(AssistScreen(host)) }
+        button(d, "Credits", 210, 866, 1380) { host.push(CreditsScreen(host)) }
         refresh()
     }
 
@@ -672,3 +672,43 @@ private const val ASSIST_TEXT = """1. Close the app from the recents menu
 
 6. Disconnect the car battery (last resort)
   • Turn the car off, disconnect the negative (black) terminal for about 2 minutes and reconnect it."""
+
+// =================================================================== CREDITS
+
+class CreditsScreen(host: UiHost) : Screen(host) {
+    override val theme = Theme.GREEN
+    private var taps = 0
+    private var lastTap = 0L
+
+    override fun build(d: DesignLayout) {
+        sideGlow(d)
+        header(d, "Credits")
+        d.add(GText(ctx, "Corsa C Preferences", 80f, Gravity.CENTER), 200, 215, 1400, 120)
+
+        d.add(GText(ctx, "App, OAI module and TID", 44f, Gravity.CENTER, plainColor = 0xFF9AA0A8.toInt()), 200, 400, 1400, 70)
+        d.add(GText(ctx, "Leo Jukić", 88f, Gravity.CENTER), 200, 470, 1400, 130)
+
+        d.add(GText(ctx, "Design", 44f, Gravity.CENTER, plainColor = 0xFF9AA0A8.toInt()), 200, 680, 1400, 70)
+        val andrija = d.add(GText(ctx, "Andrija Pulić", 88f, Gravity.CENTER), 500, 750, 800, 130)
+        andrija.rainbow = Prefs.rainbowAndrija
+        // easter egg: 10 brzih pritisaka -> ime u duginim bojama (i natrag)
+        andrija.setOnClickListener {
+            val now = System.currentTimeMillis()
+            taps = if (now - lastTap < 1500) taps + 1 else 1
+            lastTap = now
+            if (taps >= 10) {
+                taps = 0
+                Prefs.rainbowAndrija = !Prefs.rainbowAndrija
+                andrija.rainbow = Prefs.rainbowAndrija
+                if (Prefs.rainbowAndrija) Hub.send("LANDRIJA :)")
+            }
+        }
+
+        val version = try {
+            ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName
+        } catch (_: Exception) {
+            "?"
+        }
+        d.add(GText(ctx, "Interior Light $version", 36f, Gravity.CENTER, plainColor = 0xFF6F757D.toInt()), 200, 1080, 1400, 60)
+    }
+}

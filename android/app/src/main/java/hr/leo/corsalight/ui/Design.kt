@@ -159,6 +159,28 @@ open class GText(
             updateShader()
         }
 
+    /** Easter egg: duga koja se polako pomice kroz tekst. */
+    var rainbow = false
+        set(v) {
+            field = v
+            updateShader()
+        }
+    private var rainbowShader: LinearGradient? = null
+    private val rainbowMatrix = Matrix()
+
+    override fun onDraw(canvas: Canvas) {
+        val rs = rainbowShader
+        if (rainbow && rs != null) {
+            val w = width.toFloat()
+            val shift = (android.os.SystemClock.uptimeMillis() % 2500L) / 2500f * w
+            rainbowMatrix.setTranslate(shift, 0f)
+            rs.setLocalMatrix(rainbowMatrix)
+            paint.shader = rs
+        }
+        super.onDraw(canvas)
+        if (rainbow) postInvalidateOnAnimation()
+    }
+
     init {
         this.text = text
         this.gravity = gravity
@@ -177,7 +199,12 @@ open class GText(
     }
 
     private fun updateShader() {
-        if (plainColor != null || height == 0) {
+        if (rainbow && width > 0) {
+            val colors = intArrayOf(0xFFFF3B30.toInt(), 0xFFFF9500.toInt(), 0xFFFFE600.toInt(), 0xFF34C759.toInt(),
+                0xFF2F8CFF.toInt(), 0xFFAF52DE.toInt(), 0xFFFF3B30.toInt())
+            rainbowShader = LinearGradient(0f, 0f, width.toFloat(), 0f, colors, null, Shader.TileMode.REPEAT)
+            paint.shader = rainbowShader
+        } else if (plainColor != null || height == 0) {
             paint.shader = null
         } else {
             val colors = if (highlight) intArrayOf(0xFF299BD0.toInt(), 0xFF77CDF4.toInt())

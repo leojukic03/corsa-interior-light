@@ -42,6 +42,7 @@ object Prefs {
     var staticOn by bool("staticOn", true)            // "Static message": idle tekst kad nista ne svira
     var personalWelcome by bool("personalWelcome", true)  // ime iza pozdrava
     var userName by str("userName", "Leo")            // "User Name", na TID ide velikim slovima
+    var rainbowAndrija by bool("rainbowAndrija", false)  // easter egg na ekranu Credits
 
     /** Tekst koji Arduino dobiva kao drugi dio pozdrava. */
     fun welcome2ForTid(): String = if (personalWelcome) TextUtil.forTid(userName, 10) else ""

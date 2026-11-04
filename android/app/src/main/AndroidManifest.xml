@@ -29,6 +29,11 @@
             android:exported="false"
             android:screenOrientation="sensorLandscape" />
 
+        <activity
+            android:name=".ClassicActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape" />
+
         <!-- Kad se Arduino ukljuci u USB: dozvola + pokretanje servisa, bez otvaranja ekrana -->
         <activity
             android:name=".UsbAttachActivity"

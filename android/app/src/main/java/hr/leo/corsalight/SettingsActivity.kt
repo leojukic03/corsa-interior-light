@@ -60,14 +60,15 @@ class SettingsActivity : Activity() {
         val w1 = findViewById<EditText>(R.id.welcome1)
         val w2 = findViewById<EditText>(R.id.welcome2)
         w1.setText(Prefs.welcome1)
-        w2.setText(Prefs.welcome2)
+        w2.setText(Prefs.userName)
         val saveWelcome = {
             Prefs.welcome1 = TextUtil.forTid(w1.text.toString(), 10).ifEmpty { "WILLKOMMEN" }
-            Prefs.welcome2 = TextUtil.forTid(w2.text.toString(), 10)  // prazno = samo prvi tekst
+            Prefs.userName = w2.text.toString().trim()  // prazno = samo prvi tekst
+            Prefs.personalWelcome = Prefs.userName.isNotEmpty()
             w1.setText(Prefs.welcome1)
-            w2.setText(Prefs.welcome2)
+            w2.setText(Prefs.userName)
             Hub.send("E${Prefs.welcome1}")
-            Hub.send("F${Prefs.welcome2}")
+            Hub.send("F${Prefs.welcome2ForTid()}")
         }
         findViewById<Button>(R.id.btnWelcomeSave).setOnClickListener {
             saveWelcome()

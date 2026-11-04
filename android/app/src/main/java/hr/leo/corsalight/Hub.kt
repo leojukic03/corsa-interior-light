@@ -22,6 +22,14 @@ object Hub {
         }
     var usbInfo = ""
 
+    /** Demo nacin (dugi pritisak na Opel logo): izbornici rade i bez Arduina, npr. u emulatoru. */
+    var demo = false
+        set(v) {
+            field = v
+            changed()
+        }
+    val uiConnected get() = connected || demo
+
     var nowText = ""      // ocisceni tekst koji je poslan na TID
         private set
     var nowSource = ""    // paket aplikacije koja svira

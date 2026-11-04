@@ -51,8 +51,9 @@ struct Settings {
   char welcome2[11];
   uint8_t welcomeAnim;  // stil pozdrava na TID-u (0-5, vidi welcomeFrame)
   uint8_t ledWelcome;   // stil LED pozdrava (0-3, vidi renderWelcome)
+  uint8_t welcomeOn;    // 1 = pozdrav na TID-u kod paljenja (Center Display -> Welcome message)
 };
-const uint8_t MAGIC = 0x50;
+const uint8_t MAGIC = 0x51;
 // Stari program koristi EEPROM adrese 0 i 1 (boja, svjetlina). Nase postavke idu od 16,
 // da se stari program ne pokvari ako ga ikad vratis.
 const int EE_BASE = 16;
@@ -63,7 +64,7 @@ unsigned long saveT = 0;
 void loadSettings() {
   EEPROM.get(EE_BASE, cfg);
   if (cfg.magic != MAGIC) {
-    cfg = Settings{MAGIC, 255, 0, 0, 26, 1, 0, 1, "OPEL CORSA", "WILLKOMMEN", "LEO", 2, 0};
+    cfg = Settings{MAGIC, 255, 0, 0, 26, 1, 0, 1, "OPEL CORSA", "WILLKOMMEN", "LEO", 2, 0, 1};
   }
   cfg.idle[10] = 0;
   cfg.welcome1[10] = 0;
@@ -166,10 +167,10 @@ uint8_t nextByte(char *&p) {
   return constrain(v, 0, 255);
 }
 
-void startWelcome() {
+void startWelcome(bool forceTid = false) {
   welcomeT = millis();
   welcomeLed = cfg.power;
-  welcomeTid = true;
+  welcomeTid = cfg.welcomeOn || forceTid;  // "Welcome message" iskljucen: samo LED animacija
   welcomeTidStarted = false;
   sparkleMask = 0;
   base = CRGB::Black;
@@ -194,7 +195,7 @@ void handleLine(char *s) {
       saveLater();
       break;
     case 'M':
-      cfg.mode = atoi(a) == 1 ? 1 : 0;
+      cfg.mode = constrain(atoi(a), 0, 7);
       memcpy(star, leds, sizeof(star));  // efekt krene od trenutnog stanja
       starPos = NUM_LEDS;
       saveLater();
@@ -244,12 +245,16 @@ void handleLine(char *s) {
       cfg.welcomeAnim = constrain(atoi(a), 0, 5);
       saveLater();
       break;
+    case 'G':
+      cfg.welcomeOn = atoi(a) ? 1 : 0;
+      saveLater();
+      break;
     case 'K':
       cfg.ledWelcome = constrain(atoi(a), 0, 3);
       saveLater();
       break;
     case 'W':
-      startWelcome();
+      startWelcome(true);  // "probaj": pokazi i TID dio, cak i ako je iskljucen
       break;
     case '?':
       Serial.println(F("OK CorsaLight 2"));
@@ -307,6 +312,92 @@ void renderStar(unsigned long now) {
 }
 
 // LED pozdrav (cfg.ledWelcome): 0 s rubova prema sredini, 1 lagano paljenje, 2 klizi s lijeva, 3 iskrice
+
+// Animacije s ekrana "Footwell Lighting Animation" (mod 2-7). Koriste star[] kao spremnik.
+//  2 Raindrops       kapi u boji padaju na nasumicna mjesta i gase se
+//  3 Random          nasumicne LED-ice u nasumicnim bojama
+//  4 Calm            boja lagano "dise"
+//  5 Smoke           meko titranje boje, kao dim
+//  6 Thunder         tamna boja s naglim bijelim bljeskovima
+//  7 Changing Colour cijela traka polako mijenja boju kroz dugu
+unsigned long fxTick = 0, fxNext = 0;
+uint8_t fxHue = 0, flashLeft = 0;
+
+void renderEffect(unsigned long now) {
+  CRGB c = base;  // vec ugasena ako je power 0
+  switch (cfg.mode) {
+    case 2:  // Raindrops
+      if (now - fxTick >= 30) {
+        fxTick = now;
+        fadeToBlackBy(star, NUM_LEDS, 18);
+        if ((long)(now - fxNext) >= 0) {
+          uint8_t i = random(NUM_LEDS);
+          star[i] = blend(c, CRGB::White, 90);
+          fxNext = now + random(80, 450);
+        }
+      }
+      memcpy(leds, star, sizeof(leds));
+      break;
+    case 3:  // Random
+      if (now - fxTick >= 40) {
+        fxTick = now;
+        fadeToBlackBy(star, NUM_LEDS, 10);
+        if ((long)(now - fxNext) >= 0) {
+          CRGB r = CHSV(random8(), 255, 255);
+          if (!cfg.power) r = CRGB::Black;
+          star[random(NUM_LEDS)] = r;
+          fxNext = now + random(60, 220);
+        }
+      }
+      memcpy(leds, star, sizeof(leds));
+      break;
+    case 4: {  // Calm: disanje 5 s
+      uint8_t b = beatsin8(12, 40, 255);
+      CRGB t = c;
+      t.nscale8_video(b);
+      fill_solid(leds, NUM_LEDS, t);
+      break;
+    }
+    case 5:  // Smoke: meki sum po traci
+      for (uint8_t i = 0; i < NUM_LEDS; i++) {
+        uint8_t n = inoise8(i * 40, now / 6);
+        n = qadd8(scale8(n, 200), 30);
+        CRGB t = c;
+        t.nscale8_video(n);
+        leds[i] = t;
+      }
+      break;
+    case 6: {  // Thunder
+      CRGB dim = c;
+      dim.nscale8_video(35);
+      if (now - fxTick >= 20) {
+        fxTick = now;
+        if (flashLeft == 0 && (long)(now - fxNext) >= 0) {
+          flashLeft = random(2, 5);  // 2-4 brza bljeska
+          fxNext = now + random(1500, 7000);
+        }
+        fadeToBlackBy(star, NUM_LEDS, 60);
+        if (flashLeft && random8() < 90) {
+          uint8_t from = random(NUM_LEDS / 2), len = random(6, NUM_LEDS - from);
+          for (uint8_t i = from; i < from + len && i < NUM_LEDS; i++) star[i] = CRGB::White;
+          flashLeft--;
+        }
+      }
+      for (uint8_t i = 0; i < NUM_LEDS; i++) {
+        leds[i] = dim;
+        if (cfg.power) leds[i] += star[i];
+      }
+      break;
+    }
+    case 7:  // Changing Colour
+      if (now - fxTick >= 60) {
+        fxTick = now;
+        fxHue++;
+      }
+      fill_solid(leds, NUM_LEDS, cfg.power ? CRGB(CHSV(fxHue, 255, 255)) : CRGB(CRGB::Black));
+      break;
+  }
+}
 
 void renderWelcome(unsigned long now) {
   unsigned long e = now - welcomeT;
@@ -397,6 +488,7 @@ void renderLeds(unsigned long now) {
 
   if (welcomeLed) renderWelcome(now);
   else if (cfg.mode == 1) renderStar(now);
+  else if (cfg.mode >= 2) renderEffect(now);
   else fill_solid(leds, NUM_LEDS, base);
 
   if (cfg.react && cfg.power && !welcomeLed) {

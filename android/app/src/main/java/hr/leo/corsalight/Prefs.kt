@@ -37,6 +37,18 @@ object Prefs {
     var volumePkg by str("volumePkg", "")  // paket prozora s glasnocom (naucen automatski)
     var volumeMax by int("volumeMax", 40)
 
+    // novi izgled (Figma): Center Display i User Preferences
+    var welcomeOn by bool("welcomeOn", true)          // "Welcome message": pozdrav na TID-u kod paljenja
+    var staticOn by bool("staticOn", true)            // "Static message": idle tekst kad nista ne svira
+    var personalWelcome by bool("personalWelcome", true)  // ime iza pozdrava
+    var userName by str("userName", "Leo")            // "User Name", na TID ide velikim slovima
+
+    /** Tekst koji Arduino dobiva kao drugi dio pozdrava. */
+    fun welcome2ForTid(): String = if (personalWelcome) TextUtil.forTid(userName, 10) else ""
+
+    /** Idle tekst za TID (prazno ako je "Static message" iskljucen). */
+    fun idleForTid(): String = if (staticOn) TextUtil.forTid(idleText, 10) else ""
+
     /** Postotak u 0..255 s gama krivuljom, da su niske razine finije. */
     fun brightnessByte(): Int {
         val p = brightness.coerceIn(0, 100)
@@ -50,11 +62,12 @@ object Prefs {
         "P${if (power) 1 else 0}",
         "M$mode",
         "R${if (react) 1 else 0}",
-        "I${TextUtil.forTid(idleText, 10)}",
+        "I${idleForTid()}",
         "E${TextUtil.forTid(welcome1, 10)}",
-        "F${TextUtil.forTid(welcome2, 10)}",
+        "F${welcome2ForTid()}",
         "A$welcomeStyle",
         "K$ledWelcomeStyle",
+        "G${if (welcomeOn) 1 else 0}",
     )
 
     private fun int(key: String, def: Int) = object : ReadWriteProperty<Any?, Int> {

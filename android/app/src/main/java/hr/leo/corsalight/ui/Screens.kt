@@ -34,6 +34,8 @@ interface UiHost {
     fun back()
     fun home()
     fun popup(message: String, button: String = "OK", onOk: () -> Unit = {})
+    /** Ponovno nacrtaj trenutni ekran (npr. nova boja sucelja nakon promjene boje LED-ica). */
+    fun rebuild()
 }
 
 /** Jedan ekran iz Figme. build() slaze elemente u koordinatama dizajna 1800 x 1200. */
@@ -151,7 +153,8 @@ abstract class Screen(protected val host: UiHost) {
                 }
             }
         }
-        val sv = ScrollView(ctx)
+        // nakon pomicanja lista "sjedne" na najblizi red, kao kotacic na starim iPhoneima
+        val sv = SnapScrollView(ctx, pitch = { 200f * d.scale }, count = { rows.size })
         sv.isVerticalScrollBarEnabled = false
         sv.overScrollMode = View.OVER_SCROLL_NEVER
         sv.addView(inner)
@@ -286,6 +289,114 @@ class InteriorView(ctx: android.content.Context, private val crop: Rect?) : View
     }
 }
 
+/**
+ * Zivi pregled LED animacije iza prozirnog tepiha na donjoj slicici (Footwell -> Animation).
+ * Glumi 26 LED-ica trake istim efektima kao Arduino (renderStar / renderEffect), razmazano u sjaj.
+ */
+class LedPreview(ctx: android.content.Context) : View(ctx) {
+    private val n = 26
+    private val leds = FloatArray(n * 3)      // trenutne boje 0..1
+    private val p = Paint()
+    private val rnd = java.util.Random()
+    private var last = 0L
+    private var next = 0L
+    private var star = n
+    private var hue = 0f
+    private var flashes = 0
+
+    private fun base(): FloatArray {
+        val c = if (Prefs.power) Color.rgb(Prefs.r, Prefs.g, Prefs.b) else Color.BLACK
+        return floatArrayOf(Color.red(c) / 255f, Color.green(c) / 255f, Color.blue(c) / 255f)
+    }
+
+    private fun set(i: Int, r: Float, g: Float, b: Float) {
+        leds[i * 3] = r; leds[i * 3 + 1] = g; leds[i * 3 + 2] = b
+    }
+
+    private fun fade(k: Float) {
+        for (i in leds.indices) leds[i] *= k
+    }
+
+    private fun step(now: Long) {
+        val b = base()
+        val t = now / 1000f
+        when (Prefs.mode) {
+            1 -> {  // Shooting Star
+                if (now - last > 30) {
+                    last = now
+                    if (star < n) { set(star, b[0], b[1], b[2]); star++ }
+                    else if (now > next) { star = 0; next = now + 1200 + rnd.nextInt(1500) }
+                    fade(0.82f)
+                }
+            }
+            2 -> {  // Raindrops
+                if (now - last > 30) {
+                    last = now
+                    fade(0.93f)
+                    if (now > next) {
+                        val i = rnd.nextInt(n)
+                        set(i, (b[0] + 0.35f).coerceAtMost(1f), (b[1] + 0.35f).coerceAtMost(1f), (b[2] + 0.35f).coerceAtMost(1f))
+                        next = now + 80 + rnd.nextInt(370)
+                    }
+                }
+            }
+            3 -> {  // Random
+                if (now - last > 40) {
+                    last = now
+                    fade(0.96f)
+                    if (now > next && Prefs.power) {
+                        val c = Color.HSVToColor(floatArrayOf(rnd.nextInt(360).toFloat(), 1f, 1f))
+                        set(rnd.nextInt(n), Color.red(c) / 255f, Color.green(c) / 255f, Color.blue(c) / 255f)
+                        next = now + 60 + rnd.nextInt(160)
+                    }
+                }
+            }
+            4 -> {  // Calm: disanje
+                val k = 0.16f + 0.84f * (0.5f + 0.5f * kotlin.math.sin(t * 2.5f))
+                for (i in 0 until n) set(i, b[0] * k, b[1] * k, b[2] * k)
+            }
+            5 -> {  // Smoke
+                for (i in 0 until n) {
+                    val k = 0.25f + 0.75f * (0.5f + 0.25f * kotlin.math.sin(i * 0.7f + t * 1.7f) + 0.25f * kotlin.math.sin(i * 0.31f - t * 1.1f))
+                    set(i, b[0] * k, b[1] * k, b[2] * k)
+                }
+            }
+            6 -> {  // Thunder
+                if (now - last > 20) {
+                    last = now
+                    if (flashes == 0 && now > next) { flashes = 2 + rnd.nextInt(3); next = now + 1500 + rnd.nextInt(4500) }
+                    for (i in 0 until n) set(i, b[0] * 0.14f, b[1] * 0.14f, b[2] * 0.14f)
+                    if (flashes > 0 && Prefs.power && rnd.nextInt(256) < 90) {
+                        val from = rnd.nextInt(n / 2)
+                        for (i in from until (from + 6 + rnd.nextInt(n - from - 5)).coerceAtMost(n)) set(i, 1f, 1f, 1f)
+                        flashes--
+                    }
+                }
+            }
+            7 -> {  // Changing Colour
+                hue = (hue + 0.4f) % 360f
+                val c = if (Prefs.power) Color.HSVToColor(floatArrayOf(hue, 1f, 1f)) else Color.BLACK
+                for (i in 0 until n) set(i, Color.red(c) / 255f, Color.green(c) / 255f, Color.blue(c) / 255f)
+            }
+            else -> {  // Static: mirna boja
+                for (i in 0 until n) set(i, b[0], b[1], b[2])
+            }
+        }
+    }
+
+    override fun onDraw(c: Canvas) {
+        val now = android.os.SystemClock.uptimeMillis()
+        step(now)
+        val colors = IntArray(n) { i ->
+            Color.rgb((leds[i * 3] * 255).toInt().coerceIn(0, 255), (leds[i * 3 + 1] * 255).toInt().coerceIn(0, 255),
+                (leds[i * 3 + 2] * 255).toInt().coerceIn(0, 255))
+        }
+        p.shader = android.graphics.LinearGradient(0f, 0f, width.toFloat(), 0f, colors, null, android.graphics.Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), p)
+        postInvalidateOnAnimation()
+    }
+}
+
 class FootwellScreen(host: UiHost) : Screen(host) {
     override val theme = Theme.BLUE
     private lateinit var glow: View
@@ -294,6 +405,8 @@ class FootwellScreen(host: UiHost) : Screen(host) {
         sideGlow(d)
         // Figma (Frame 10): iza gornje slicice je pravokutnik u boji, vidi se kroz prozirni tepih
         glow = d.add(View(ctx), 994, 282, 533, 325)
+        // iza donje slicice: zivi pregled odabrane animacije
+        d.add(LedPreview(ctx), 994, 712, 533, 325)
         listOf(217, 647).forEach { y ->
             val img = d.add(ImageView(ctx), 946, y, 648, 430)
             img.setImageResource(R.drawable.d_footwell_thumb)
@@ -386,7 +499,7 @@ class ColourScreen(host: UiHost) : Screen(host) {
             Hub.send("P1")
         }
         ledMessage("LED ${s.name}")
-        refresh()
+        host.rebuild()  // okviri, sjaj i logo dobiju novu boju
     }
 
     override fun refresh() {
@@ -415,26 +528,26 @@ class AnimationScreen(host: UiHost) : Screen(host) {
     )
     private val texts = mutableListOf<GText>()
     private var off: GText? = null
+    private lateinit var wheel: SnapScrollView
+    private lateinit var d: DesignLayout
+
+    // kotacic: vidljivo podrucje 209..1115 (906 px), fiksno mjesto u sredini (centar na 453)
+    private val pitchD = 172f
+    private val viewH = 906f
 
     override fun build(d: DesignLayout) {
-        val inner = DesignLayout(ctx, theme, designH = 250f + items.size * 172f + 250f, fixedScale = { d.scale })
-        items.forEachIndexed { i, (name, mode) ->
-            val t = inner.add(GText(ctx, name, 96f, Gravity.CENTER), 253, 250 + i * 172, 1294, 130)
-            t.setOnClickListener {
-                if (mode == null) notAvailable() else {
-                    Prefs.mode = mode
-                    Hub.send("M$mode")
-                    ledMessage(name.uppercase().take(10))
-                    refresh()
-                }
-            }
+        this.d = d
+        val inner = DesignLayout(ctx, theme, designH = viewH + (items.size - 1) * pitchD, fixedScale = { d.scale })
+        items.forEachIndexed { i, (_, _) ->
+            val t = inner.add(GText(ctx, items[i].first, 96f, Gravity.CENTER), 253, (viewH / 2 - 65 + i * pitchD).toInt(), 1294, 130)
+            t.setOnClickListener { wheel.scrollToIndex(i) }  // dovedi na fiksno mjesto, odabir kad stane
             texts += t
         }
-        val sv = ScrollView(ctx)
-        sv.isVerticalScrollBarEnabled = false
-        sv.overScrollMode = View.OVER_SCROLL_NEVER
-        sv.addView(inner)
-        d.add(sv, 0, 209, 1800, 906, DesignLayout.Span.FULL_WIDTH)
+        wheel = SnapScrollView(ctx, pitch = { pitchD * d.scale }, count = { items.size },
+            onMove = { pos -> shape(pos) },
+            onSettle = { i -> choose(i) })
+        wheel.addView(inner)
+        d.add(wheel, 0, 209, 1800, 906, DesignLayout.Span.FULL_WIDTH)
         // tamni prijelaz gore i dolje, kao kotacic
         d.add(GradientView(ctx, Color.BLACK, 0x00000000, horizontal = false), 0, 209, 1800, 250, DesignLayout.Span.FULL_WIDTH)
             .isClickable = false
@@ -443,7 +556,46 @@ class AnimationScreen(host: UiHost) : Screen(host) {
         sideGlow(d)  // u Figmi je bocni sjaj iznad tamnih prijelaza liste
         d.add(GlowLine(ctx, vertical = true), 503, 209, 10, 906)
         d.add(GlowLine(ctx, vertical = true), 1270, 209, 10, 906)
+        // fiksno mjesto odabira (kao na starim iPhoneima): dvije tanke crte iznad i ispod
+        d.add(GlowLine(ctx, vertical = false), 540, 209 + 453 - 92, 700, 8).isClickable = false
+        d.add(GlowLine(ctx, vertical = false), 540, 209 + 453 + 84, 700, 8).isClickable = false
         off = header(d, "Footwell Lighting Animation", offButton = true)
+
+        val start = items.indexOfFirst { it.second == Prefs.mode }.coerceAtLeast(0)
+        wheel.markSettled(start)
+        wheel.post {
+            wheel.scrollToIndex(start, smooth = false)
+            shape(start.toFloat())
+        }
+        refresh()
+    }
+
+    /** Stavke dalje od sredine su manje i blijede, kao na kotacicu. */
+    private fun shape(pos: Float) {
+        texts.forEachIndexed { i, t ->
+            val dist = kotlin.math.abs(i - pos)
+            val k = (1f - 0.12f * dist).coerceAtLeast(0.7f)
+            t.scaleX = k
+            t.scaleY = k
+            t.alpha = (1f - 0.28f * dist).coerceAtLeast(0.25f)
+        }
+    }
+
+    private fun choose(i: Int) {
+        val (name, mode) = items[i]
+        if (mode == null) {
+            // Music Sync jos ne postoji: vrati kotacic na trenutnu animaciju
+            notAvailable()
+            val back = items.indexOfFirst { it.second == Prefs.mode }.coerceAtLeast(0)
+            wheel.markSettled(back)
+            wheel.scrollToIndex(back)
+            return
+        }
+        if (mode != Prefs.mode) {
+            Prefs.mode = mode
+            Hub.send("M$mode")
+            ledMessage(name.uppercase().take(10))
+        }
         refresh()
     }
 

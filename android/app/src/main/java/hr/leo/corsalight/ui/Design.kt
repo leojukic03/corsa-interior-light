@@ -38,11 +38,33 @@ const val DESIGN_H = 1200f
  * sloj u "hue" nacinu (zeleni #24ED12, zuti #EDE412), pa je ovdje isti ton s istom
  * svjetlinom kao plava #299BD0.
  */
-enum class Theme(val accent: Int) {
-    BLUE(0xFF299BD0.toInt()),     // normalno
-    RED(0xFFD02929.toInt()),      // OAI modul nije spojen
-    GREEN(0xFF37D129.toInt()),    // Advanced Settings
-    YELLOW(0xFFD0C829.toInt()),   // Center Display
+enum class Theme {
+    /** Normalno: prati boju LED-ica (u Figmi plava #299BD0). */
+    BLUE {
+        override val accent get() = ledAccent()
+    },
+    RED {  // OAI modul nije spojen
+        override val accent = 0xFFD02929.toInt()
+    },
+    GREEN {  // Advanced Settings
+        override val accent = 0xFF37D129.toInt()
+    },
+    YELLOW {  // Center Display
+        override val accent = 0xFFD0C829.toInt()
+    };
+
+    abstract val accent: Int
+}
+
+/**
+ * Boja sucelja iz boje LED trake: isti ton, ali zasicenje i svjetlina kao plava iz Figme
+ * (#299BD0 = HSV 199°, 0.80, 0.82), da tekst i okviri ostanu citljivi. Bijela -> srebrna.
+ */
+fun ledAccent(): Int {
+    val hsv = FloatArray(3)
+    Color.colorToHSV(Color.rgb(hr.leo.corsalight.Prefs.r, hr.leo.corsalight.Prefs.g, hr.leo.corsalight.Prefs.b), hsv)
+    return if (hsv[1] < 0.15f) Color.HSVToColor(floatArrayOf(205f, 0.18f, 0.80f))
+    else Color.HSVToColor(floatArrayOf(hsv[0], 0.80f, 0.82f))
 }
 
 /** Tamni kraj prijelaza okvira (#06222F za plavu, #2F0606 za crvenu). */
@@ -207,7 +229,7 @@ open class GText(
         } else if (plainColor != null || height == 0) {
             paint.shader = null
         } else {
-            val colors = if (highlight) intArrayOf(0xFF299BD0.toInt(), 0xFF77CDF4.toInt())
+            val colors = if (highlight) intArrayOf(ledAccent(), mix(ledAccent(), Color.WHITE, 0.45f))
             else intArrayOf(0xFFB7B7B7.toInt(), 0xFFFFFFFF.toInt())
             paint.shader = LinearGradient(0f, height.toFloat(), 0f, 0f, colors, floatArrayOf(0.13f, 0.89f), Shader.TileMode.CLAMP)
         }
@@ -415,7 +437,7 @@ fun blurredSnapshot(v: View, darken: Float = 0.45f): android.graphics.Bitmap? {
 
 /** Okomiti klizac 144 x 747 iz dizajna: gore = 100 %, dolje = 0 %. */
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
-class BrightnessSlider(ctx: Context, theme: Theme, value: Int, private val onChange: (Int, Boolean) -> Unit) :
+class BrightnessSlider(ctx: Context, private val theme: Theme, value: Int, private val onChange: (Int, Boolean) -> Unit) :
     View(ctx), Scalable {
     var value = value.coerceIn(0, 100)
         private set
@@ -450,7 +472,7 @@ class BrightnessSlider(ctx: Context, theme: Theme, value: Int, private val onCha
         val cx = width / 2f
         c.drawLine(cx, lineTop * s, cx, (lineTop + lineLen) * s, p)
         val cy = knobCenterY()
-        p.shader = RadialGradient(cx, cy, knob / 2 * s, 0xFF299BD0.toInt(), 0xFF06222F.toInt(), Shader.TileMode.CLAMP)
+        p.shader = RadialGradient(cx, cy, knob / 2 * s, theme.accent, darkOf(theme.accent), Shader.TileMode.CLAMP)
         c.drawCircle(cx, cy, knob / 2 * s, p)
         p.shader = null
     }
@@ -470,5 +492,82 @@ class BrightnessSlider(ctx: Context, theme: Theme, value: Int, private val onCha
             }
         }
         return super.onTouchEvent(e)
+    }
+}
+
+// ---------------------------------------------------------------- lista koja se "uskace" (kao kotacic na starim iPhoneima)
+
+/**
+ * ScrollView koji se nakon skrolanja uvijek zaustavi tocno na stavci (korak pitch u pikselima).
+ * onMove javlja polozaj dok se vrti (za izgled kotacica), onSettle kad stane na stavku.
+ */
+@SuppressLint("ViewConstructor", "ClickableViewAccessibility")
+class SnapScrollView(
+    ctx: Context,
+    private val pitch: () -> Float,
+    private val count: () -> Int,
+    private val onMove: (Float) -> Unit = {},
+    private val onSettle: (Int) -> Unit = {},
+) : android.widget.ScrollView(ctx) {
+
+    private var touching = false
+    private var settled = -1
+    private val settle = Runnable { snap() }
+
+    init {
+        isVerticalScrollBarEnabled = false
+        overScrollMode = OVER_SCROLL_NEVER
+    }
+
+    fun indexAt(y: Int = scrollY): Int {
+        val p = pitch()
+        if (p <= 0f) return 0
+        return Math.round(y / p).coerceIn(0, (count() - 1).coerceAtLeast(0))
+    }
+
+    /** Dovedi stavku i na fiksno mjesto. */
+    fun scrollToIndex(i: Int, smooth: Boolean = true) {
+        val y = Math.round(i * pitch())
+        if (smooth) smoothScrollTo(0, y) else scrollTo(0, y)
+    }
+
+    override fun dispatchTouchEvent(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                touching = true
+                removeCallbacks(settle)
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                touching = false
+                removeCallbacks(settle)
+                postDelayed(settle, 120)
+            }
+        }
+        return super.dispatchTouchEvent(e)
+    }
+
+    override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
+        super.onScrollChanged(l, t, oldl, oldt)
+        val p = pitch()
+        if (p > 0f) onMove(t / p)
+        removeCallbacks(settle)
+        if (!touching) postDelayed(settle, 90)
+    }
+
+    private fun snap() {
+        if (touching) return
+        val i = indexAt()
+        val target = Math.round(i * pitch())
+        if (kotlin.math.abs(scrollY - target) > 1) {
+            smoothScrollTo(0, target)
+        } else if (i != settled) {
+            settled = i
+            onSettle(i)
+        }
+    }
+
+    /** Za vracanje na stavku bez javljanja (npr. Music Sync koji jos ne postoji). */
+    fun markSettled(i: Int) {
+        settled = i
     }
 }

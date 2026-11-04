@@ -45,7 +45,9 @@ class MainActivity : Activity(), UiHost {
         if (Perms.hasMedia(this) && Build.VERSION.SDK_INT >= 24 && MediaListener.instance == null) {
             NotificationListenerService.requestRebind(ComponentName(this, MediaListener::class.java))
         }
-        stack.lastOrNull()?.refresh()
+        // boja LED-ica promijenjena negdje drugdje (npr. classic ekran): nacrtaj u novoj boji
+        if (shownAccent != 0 && shownAccent != hr.leo.corsalight.ui.ledAccent()) rebuild()
+        else stack.lastOrNull()?.refresh()
     }
 
     override fun onPause() {
@@ -73,6 +75,7 @@ class MainActivity : Activity(), UiHost {
     private fun show(s: Screen) {
         dismissPopup()
         val old = if (container.childCount > 0) container.getChildAt(container.childCount - 1) else null
+        shownAccent = hr.leo.corsalight.ui.ledAccent()
         val v = s.create()
         v.alpha = 0f
         container.addView(v, FrameLayout.LayoutParams(-1, -1))
@@ -100,6 +103,14 @@ class MainActivity : Activity(), UiHost {
         // prethodni ekran se gradi ispocetka, da pokaze svjeze vrijednosti
         val prev = stack.removeAt(stack.size - 1)
         push(prev.javaClass.getConstructor(UiHost::class.java).newInstance(this))
+    }
+
+    private var shownAccent = 0
+
+    override fun rebuild() {
+        if (stack.isEmpty()) return
+        val top = stack.removeAt(stack.size - 1)
+        push(top.javaClass.getConstructor(UiHost::class.java).newInstance(this))
     }
 
     override fun home() {

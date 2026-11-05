@@ -32,9 +32,9 @@ import java.util.Locale
 /**
  * Radio u izgledu Interior Lighta (Figma "Corsa C Preferences"), dizajn 1800 x 1200.
  *
- * Glavni ekran je cist: logo, ime stanice, frekvencija, RadioText, trazenje i 6 spremljenih
+ * Glavni ekran je cist: seek uz frekvenciju, logo, ime stanice, RadioText i 6 spremljenih
  * stanica odjednom (povuci ulijevo / udesno za sljedecih 6, ukupno 18). Skala za ugadanje,
- * Scan, LOC/DX, AF, TA, REG i log su u izborniku (gumb Menu gore).
+ * Scan, LOC/DX, AF, TA, REG, Mute i log su u izborniku (gumb Menu gore).
  */
 class RadioActivity : Activity() {
 
@@ -172,41 +172,38 @@ class RadioActivity : Activity() {
         @Suppress("DEPRECATION")
         back.setOnClickListener { onBackPressed() }
 
-        // logo | ime stanice, frekvencija | RadioText
-        logo = d.add(LogoView(this, theme), 150, 200, 330, 330)
-        psText = d.add(GText(this, "", 80f, Gravity.CENTER), 500, 175, 1150, 115)
+        // [<<]  logo | ime stanice + frekvencija  [>>]   (seek uz frekvenciju, kao u originalnoj aplikaciji)
+        // dodir = sljedeca stanica, drzanje = korak po korak
+        val seekDown = d.add(GButton(this, "◀◀", theme, 72f), 150, 260, 220, 220)
+        holdToStep(seekDown, { Tuner.seekDown() }, { Tuner.stepDown() })
+        val seekUp = d.add(GButton(this, "▶▶", theme, 72f), 1430, 260, 220, 220)
+        holdToStep(seekUp, { Tuner.seekUp() }, { Tuner.stepUp() })
+        logo = d.add(LogoView(this, theme), 420, 220, 300, 300)
+        psText = d.add(GText(this, "", 72f, Gravity.CENTER), 740, 210, 670, 100)
         psText.highlight = true
-        freqText = d.add(GText(this, "", 240f, Gravity.CENTER), 500, 300, 1150, 270)
-        rtText = d.add(GText(this, "", 52f, Gravity.CENTER, plainColor = 0xFFB7B7B7.toInt()), 200, 590, 1400, 80)
+        freqText = d.add(GText(this, "", 170f, Gravity.CENTER), 740, 310, 670, 200)
+        rtText = d.add(GText(this, "", 50f, Gravity.CENTER, plainColor = 0xFFB7B7B7.toInt()), 420, 555, 960, 80)
         rtText.ellipsize = TextUtils.TruncateAt.MARQUEE
         rtText.marqueeRepeatLimit = -1
         rtText.setSingleLine()
         rtText.isSelected = true
 
-        // oznake: ST, LOC/DX, AF, TA, TP (AF, TA i LOC se mijenjaju u izborniku, ovdje su samo pokazatelji)
-        fun flag(label: String, i: Int): GText = d.add(GText(this, label, 52f, Gravity.CENTER), 450 + i * 190, 680, 170, 80)
+        // oznake: ST, LOC/DX, AF, TA, TP (mijenjaju se u izborniku, ovdje su samo pokazatelji)
+        fun flag(label: String, i: Int): GText = d.add(GText(this, label, 48f, Gravity.CENTER), 450 + i * 190, 655, 170, 75)
         stereo = flag("ST", 0)
         local = flag("DX", 1)
         af = flag("AF", 2)
         ta = flag("TA", 3)
         tp = flag("TP", 4)
 
-        // trazenje: dodir = sljedeca stanica, drzanje = korak po korak; u sredini mute
-        val seekDown = d.add(GButton(this, "◀◀", theme, 80f), 150, 790, 520, 170)
-        holdToStep(seekDown, { Tuner.seekDown() }, { Tuner.stepDown() })
-        muteBtn = d.add(GButton(this, "Mute", theme, 56f), 690, 790, 420, 170)
-        muteBtn.setOnClickListener { Tuner.toggleMute() }
-        val seekUp = d.add(GButton(this, "▶▶", theme, 80f), 1130, 790, 520, 170)
-        holdToStep(seekUp, { Tuner.seekUp() }, { Tuner.stepUp() })
-
         // spremljene stanice: 6 odjednom, povuci za sljedecih 6. Dodir = slusaj, drzanje = spremi trenutnu
         val pages = Tuner.presets.size / perPage
-        dots = d.add(PageDots(this, theme, pages), 700, 982, 400, 36)
-        pager = d.add(PagedStrip(this) { dots.page = it }, 0, 1025, 1800, 140)
+        pager = d.add(PagedStrip(this) { dots.page = it }, 0, 790, 1800, 210)
+        dots = d.add(PageDots(this, theme, pages), 700, 1030, 400, 40)
         pager.pages = pages
-        val row = ButtonRow(this, scale = { d.scale }, w = 280f, h = 140f, pitch = 300f, padStart = 10f)
+        val row = ButtonRow(this, scale = { d.scale }, w = 280f, h = 210f, pitch = 300f, padStart = 10f)
         repeat(Tuner.presets.size) { i ->
-            val b = GButton(this, "", theme, 38f)
+            val b = GButton(this, "", theme, 44f)
             b.ellipsize = TextUtils.TruncateAt.END
             b.setOnClickListener { Tuner.selectPreset(i) }
             b.setOnLongClickListener {
@@ -250,8 +247,9 @@ class RadioActivity : Activity() {
         btnAf = button(2, 0, "AF") { Tuner.toggleAf() }
         btnTa = button(0, 1, "TA") { Tuner.toggleTa() }
         btnReg = button(1, 1, "REG") { Tuner.toggleReg() }
-        button(2, 1, "Log") { logOpen = true; applyMenu() }
-        afStatus = hidden(menuItems, GText(this, "", 44f, Gravity.CENTER, plainColor = 0xFFB7B7B7.toInt()), 150, 830, 1500, 90)
+        button(2, 1, "Mute") { Tuner.toggleMute() }.also { muteBtn = it }
+        button(0, 2, "Log") { logOpen = true; applyMenu() }
+        afStatus = hidden(menuItems, GText(this, "", 44f, Gravity.CENTER, plainColor = 0xFFB7B7B7.toInt()), 660, 845, 990, 90)
 
         // log sirovih poruka s MCU-a
         logView = hidden(logItems, LogView(this), 150, 190, 1500, 640)

@@ -478,11 +478,11 @@ object Tuner {
 
     private class DemoLink : Link {
         private val stations = listOf(
-            8830 to "HR1", 9220 to "NARODNI", 9550 to "ANTENA", 9780 to "HR2",
-            10050 to "OTVORENI", 10290 to "BBC", 10470 to "HR3", 10690 to "ENTER",
+            8830 to "HRT-HR1", 9220 to "NARODNI", 9550 to "ANTENA", 9850 to "HRT-HR2",
+            10050 to "OTVORENI", 10290 to "BBC", 10470 to "HRT-HR3", 10690 to "ENTER",
         )
-        private val texts = mapOf(9780 to "Vijesti u 16 sati", 9550 to "Antena Zagreb - samo hitovi")
-        private var f = 9780
+        private val texts = mapOf(9850 to "Vijesti u 16 sati", 9550 to "Antena Zagreb - samo hitovi")
+        private var f = 9850
         private var b = FM1
         private var loc = false
         private var afOn = true
@@ -531,7 +531,7 @@ object Tuner {
                     }
                     2 -> go(f + if (arg2 == 0) st() else -st())
                     4 -> { loc = arg2 == 1; state() }
-                    5 -> { b = arg2; f = if (b == AM) 864 else 9780; go(f) }
+                    5 -> { b = arg2; f = if (b == AM) 864 else 9850; go(f) }
                     8 -> { post(FREQ, arg2, f, name(f)); preset = arg2; state() }
                     255 -> state()
                 }

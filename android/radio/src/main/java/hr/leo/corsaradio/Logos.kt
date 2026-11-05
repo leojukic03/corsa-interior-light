@@ -97,7 +97,28 @@ object Logos {
         }
     }
 
+    /**
+     * HRT radio nema logotipe na radio-browseru. RDS i ljudi ga pisu razlicito (HR2, HRT2, HRT-HR2, HRT 2),
+     * pa sve to vodi na logo s Wikimedia Commonsa (javno dobro: "Logo of Croatian Radio station HR 2").
+     */
+    private val hrt = Regex("^(HRT)?(HR)?([123])$")
+
+    private fun hrtLogo(name: String): String? {
+        val m = hrt.matchEntire(name.uppercase(Locale.ROOT).filter { it.isLetterOrDigit() }) ?: return null
+        if (m.groupValues[1].isEmpty() && m.groupValues[2].isEmpty()) return null  // samo broj
+        return "https://commons.wikimedia.org/wiki/Special:FilePath/HR${m.groupValues[3]}_logo.jpg?width=400"
+    }
+
+    private fun save(bytes: ByteArray, out: File): Boolean {
+        val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return false
+        if (bmp.width < 32 || bmp.height < 32) return false
+        out.parentFile?.mkdirs()
+        out.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        return true
+    }
+
     private fun fetch(name: String, out: File): Boolean {
+        hrtLogo(name)?.let { url -> get(url)?.let { if (save(it, out)) return true } }
         // samo hrvatske stanice: pretraga svugdje daje krive logotipe (npr. HR2 -> njemacki hr2).
         // RDS pise "HR2", baza "HR 2", pa se proba i s razmakom izmedu slova i broja.
         val spaced = name.replace(Regex("(?<=[A-Za-z])(?=\\d)|(?<=\\d)(?=[A-Za-z])"), " ")
@@ -110,11 +131,7 @@ object Logos {
                 val icon = arr.getJSONObject(i).optString("favicon").trim()
                 if (icon.isEmpty()) continue
                 val bytes = get(icon.replaceFirst("http://", "https://")) ?: continue
-                val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: continue
-                if (bmp.width < 32 || bmp.height < 32) continue
-                out.parentFile?.mkdirs()
-                out.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                return true
+                if (save(bytes, out)) return true
             }
         }
         return false

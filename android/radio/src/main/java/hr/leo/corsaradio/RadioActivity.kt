@@ -225,7 +225,7 @@ class RadioActivity : Activity() {
     private fun buildMenu() {
         val accent = theme.accent
         // pozadina zakrije glavni ekran i hvata dodire
-        hidden(menuPanel, View(this).apply { setBackgroundColor(0xF5000000.toInt()); isClickable = true },
+        hidden(menuPanel, View(this).apply { setBackgroundColor(Color.BLACK); isClickable = true },
             0, 0, 1800, 1200, DesignLayout.Span.FULL_WIDTH)
         hidden(menuPanel, GradientView(this, headerOf(accent), withAlpha(headerOf(accent), 0.2f), horizontal = false),
             0, 0, 1800, 148, DesignLayout.Span.FULL_WIDTH)

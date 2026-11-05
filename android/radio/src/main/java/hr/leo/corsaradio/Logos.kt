@@ -21,7 +21,7 @@ import java.util.concurrent.Executors
  * 1. Rucno: slike u `Android/data/hr.leo.corsaradio/files/logos/`, imenovane po PI kodu
  *    (npr. `9201.png`) ili po RDS imenu bez razmaka i znakova (npr. `ANTENA.png`). PI ima prednost.
  * 2. Automatski: ako slike nema, potrazi stanicu po RDS imenu na radio-browser.info (besplatna,
- *    otvorena baza stanica) i spremi logo u istu mapu. Prvo trazi u Hrvatskoj, pa svugdje.
+ *    otvorena baza stanica) i spremi logo u istu mapu. Trazi samo hrvatske stanice.
  *    Neuspjeh se pamti 7 dana (`<IME>.none`), da se ne pita stalno.
  */
 object Logos {
@@ -98,9 +98,12 @@ object Logos {
     }
 
     private fun fetch(name: String, out: File): Boolean {
-        val q = URLEncoder.encode(name, "UTF-8")
-        for (country in listOf("&countrycode=HR", "")) {
-            val json = get("https://de1.api.radio-browser.info/json/stations/search?name=$q$country" +
+        // samo hrvatske stanice: pretraga svugdje daje krive logotipe (npr. HR2 -> njemacki hr2).
+        // RDS pise "HR2", baza "HR 2", pa se proba i s razmakom izmedu slova i broja.
+        val spaced = name.replace(Regex("(?<=[A-Za-z])(?=\\d)|(?<=\\d)(?=[A-Za-z])"), " ")
+        for (term in listOf(name, spaced).distinct()) {
+            val q = URLEncoder.encode(term, "UTF-8")
+            val json = get("https://de1.api.radio-browser.info/json/stations/search?name=$q&countrycode=HR" +
                 "&limit=10&order=clickcount&reverse=true&hidebroken=true") ?: continue
             val arr = JSONArray(String(json, Charsets.UTF_8))
             for (i in 0 until arr.length()) {

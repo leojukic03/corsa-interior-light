@@ -224,8 +224,10 @@ object Tuner {
 
     private fun onEvent(what: Int, arg1: Int, arg2: Int, obj: Any?) {
         val body = "$arg1 $arg2" + (if (obj != null) " \"$obj\"" else "")
-        if (lastRx[what] != body) {  // iste poruke koje se ponavljaju ne zatrpavaju log
-            lastRx[what] = body
+        // iste poruke koje se ponavljaju ne zatrpavaju log; RADIO/FREQ/REGION imaju podnaredbu u arg1
+        val key = if (what == RADIO || what == FREQ || what == REGION) what * 1000 + (arg1 and 255) else what * 1000
+        if (lastRx[key] != body) {
+            lastRx[key] = body
             log("RX $what $body")
         }
         when (what) {

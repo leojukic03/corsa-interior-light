@@ -1,9 +1,14 @@
 package hr.leo.corsaradio
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
+import android.os.SystemClock
 import android.util.Log
+import java.util.Locale
+import kotlin.math.abs
 
 /*
  * Tuner headunita TS18 (TopWay). Originalna radio aplikacija prica s MCU-om preko
@@ -13,7 +18,7 @@ import android.util.Log
  */
 
 /** Jedno od 18 spremljenih mjesta. freq 0 = prazno. */
-class Preset(var freq: Int = 0, var ps: String = "")
+class Preset(var freq: Int = 0, var ps: String = "", var pi: Int = 0)
 
 object Tuner {
     private const val TAG = "CorsaRadio"
@@ -51,6 +56,10 @@ object Tuner {
     var muted = false; private set
     val presets = Array(18) { Preset() }
     var currentPreset = -1; private set
+    var pi = 0; private set              // RDS PI kod trenutne stanice (0 = nepoznat)
+    var reg = false; private set
+    /** Softverski AF: aplikacija sama trazi istu stanicu (isti PI) na drugoj frekvenciji. */
+    var softAf = true; private set
 
     var fmMin = 8750; private set
     var fmMax = 10800; private set
@@ -107,8 +116,13 @@ object Tuner {
         }
     }
 
-    fun open() {
+    fun open(ctx: Context) {
         if (link != null) return
+        if (prefs == null) {
+            prefs = ctx.applicationContext.getSharedPreferences("radio", Context.MODE_PRIVATE)
+            softAf = prefs?.getBoolean("softAf", true) ?: true
+            loadKnown()
+        }
         link = try {
             TwLink(main).also { demo = false }
         } catch (e: Throwable) {
@@ -116,14 +130,18 @@ object Tuner {
             demo = true
             DemoLink()
         }
+        main.removeCallbacks(tick)
+        main.postDelayed(tick, 1000)
     }
 
     fun close() {
+        main.removeCallbacks(tick)
         try { link?.close() } catch (e: Throwable) { Log.w(TAG, "close", e) }
         link = null
     }
 
-    private fun write(what: Int, arg1: Int = 0, arg2: Int = 0) {
+    private fun write(what: Int, arg1: Int = 0, arg2: Int = 0, quiet: Boolean = false) {
+        if (!quiet) log("TX $what $arg1 $arg2")
         try {
             link?.write(what, arg1, arg2)
         } catch (e: Throwable) {
@@ -141,6 +159,7 @@ object Tuner {
         write(SOURCE, 255)
         write(REGION, 0)
         write(RADIO, 255)
+        write(RDS, 0, if (softAf) 1 else 0)
         write(RDS, 255)
         write(MUTE, 255)
     }
@@ -157,22 +176,35 @@ object Tuner {
 
     // ---------------- naredbe
 
-    fun seekUp() = write(RADIO, 1, 0)
-    fun seekDown() = write(RADIO, 1, 1)
-    fun stepUp() = write(RADIO, 2, 0)
-    fun stepDown() = write(RADIO, 2, 1)
-    fun autoStore() = write(RADIO, 0, 0)
+    fun seekUp() { userAction(); write(RADIO, 1, 0) }
+    fun seekDown() { userAction(); write(RADIO, 1, 1) }
+    fun stepUp() { userAction(); write(RADIO, 2, 0) }
+    fun stepDown() { userAction(); write(RADIO, 2, 1) }
+    fun autoStore() { userAction(); write(RADIO, 0, 0) }
     fun toggleLocal() = write(RADIO, 4, if (local) 0 else 1)
-    fun toggleAf() = write(RDS, 0, if (af) 0 else 1)
     fun toggleTa() = write(RDS, 1, if (ta) 0 else 1)
+    fun toggleReg() = write(RDS, 3, if (reg) 0 else 1)
     fun toggleMute() = write(513, 2, 3)
 
+    /** Ukljuci / iskljuci AF. Isti prekidac salje i MCU-u (RDS AF), a softver radi povrh toga. */
+    fun toggleAf() {
+        softAf = !softAf
+        prefs?.edit()?.putBoolean("softAf", softAf)?.apply()
+        afNote = ""
+        userAction()
+        write(RDS, 0, if (softAf) 1 else 0)
+        write(RDS, 255)
+        changed()
+    }
+
     fun tune(f: Int) {
+        userAction()
         write(FREQ, 255, f.coerceIn(min, max))
         requestSource()
     }
 
     fun selectPreset(i: Int) {
+        userAction()
         write(FREQ, i, band)
         requestSource()
     }
@@ -181,13 +213,21 @@ object Tuner {
 
     /** FM1 -> FM2 -> AM -> FM1. */
     fun nextBand() {
+        userAction()
         write(RADIO, 5, (band + 1) % 3)
         requestSource()
     }
 
+    fun format(f: Int) = if (isAm) "$f" else String.format(Locale.US, "%.2f", f / 100f)
+
     // ---------------- dogadaji s MCU-a
 
     private fun onEvent(what: Int, arg1: Int, arg2: Int, obj: Any?) {
+        val body = "$arg1 $arg2" + (if (obj != null) " \"$obj\"" else "")
+        if (lastRx[what] != body) {  // iste poruke koje se ponavljaju ne zatrpavaju log
+            lastRx[what] = body
+            log("RX $what $body")
+        }
         when (what) {
             RADIO -> when (arg1) {
                 0 -> {
@@ -197,6 +237,7 @@ object Tuner {
                 }
                 1 -> band = arg2
                 2 -> {
+                    if (arg2 != freq) { pi = 0; piSince = 0; lostSince = 0 }
                     freq = arg2
                     ps = (obj as? String)?.trim().orEmpty()
                     radioText = ""
@@ -208,12 +249,16 @@ object Tuner {
                 if (i in presets.indices) {
                     presets[i].freq = arg2
                     presets[i].ps = (obj as? String)?.trim().orEmpty()
+                    presets[i].pi = arg1 ushr 16
+                    if (band != AM) learn(presets[i].pi, arg2)
                 }
             }
             RDS -> {
                 af = arg1 and 64 != 0
                 ta = arg1 and 32 != 0
                 tp = arg1 and 128 != 0
+                reg = arg1 and 4 != 0
+                pi = arg1 ushr 16
             }
             RDS_TEXT -> radioText = (obj as? String)?.trim().orEmpty()
             REGION -> when (arg1) {
@@ -233,7 +278,7 @@ object Tuner {
                 9 -> seekUp()
                 10 -> seekDown()
             }
-            else -> return
+            else -> Unit
         }
         changed()
     }
@@ -250,6 +295,182 @@ object Tuner {
             }
         }
     }
+
+
+    // ---------------- softverski AF
+    //
+    // MCU na TS18 ne prebacuje frekvenciju pouzdano, pa to radi aplikacija: dok je stanica
+    // stabilna (PI se vidi 3 s), zapamti njezin PI i frekvencije. Kad PI nestane (ili stereo
+    // padne) 4 s, proba redom ostale poznate frekvencije istog PI-ja i ostane na prvoj gdje
+    // se PI vrati. Poznate frekvencije dolaze iz spremljenih stanica, skeniranja i ranijeg slusanja.
+
+    private const val LOCK_MS = 3000L
+    private const val LOSS_MS = 4000L
+    private const val CANDIDATE_MS = 3000L
+    private const val USER_GRACE_MS = 6000L
+
+    var afNote = ""; private set
+
+    private var prefs: SharedPreferences? = null
+    private val known = HashMap<Int, MutableSet<Int>>()   // PI -> frekvencije
+    private var lockPi = 0
+    private var lockFreq = 0
+    private var lockStereo = false
+    private var piSince = 0L
+    private var lostSince = 0L
+    private var userT = 0L
+    private var cooldownUntil = 0L
+    private var searching = false
+    private var queue: List<Int> = emptyList()
+    private var qi = 0
+    private var origin = 0
+    private var candT = 0L
+
+    private val tick = object : Runnable {
+        override fun run() {
+            try { afTick() } catch (e: Throwable) { Log.w(TAG, "afTick", e) }
+            main.postDelayed(this, 1000)
+        }
+    }
+
+    /** Svaka radnja korisnika (ili tipki na volanu) prekida trazenje i daje 6 s mira. */
+    private fun userAction() {
+        userT = SystemClock.elapsedRealtime()
+        searching = false
+        lockPi = 0; piSince = 0; lostSince = 0
+    }
+
+    fun afStatus(): String = when {
+        !softAf -> "AF off"
+        isAm -> "AF: FM only"
+        searching -> "AF: searching " + format(queue.getOrElse(qi) { freq })
+        afNote.isNotEmpty() -> afNote
+        pi != 0 -> "AF on  \u00B7  PI " + String.format(Locale.US, "%04X", pi) + "  \u00B7  " + (known[pi]?.size ?: 0) + " freq"
+        else -> "AF on  \u00B7  waiting for RDS"
+    }
+
+    private fun learn(p: Int, f: Int) {
+        if (p == 0 || f == 0) return
+        val set = known.getOrPut(p) { HashSet() }
+        if (set.size < 12 && set.add(f)) saveKnown()
+    }
+
+    private fun saveKnown() {
+        val txt = known.entries.joinToString(";") { e -> "${e.key}:${e.value.joinToString(",")}" }
+        prefs?.edit()?.putString("known", txt)?.apply()
+    }
+
+    private fun loadKnown() {
+        known.clear()
+        try {
+            val txt = prefs?.getString("known", "").orEmpty()
+            for (part in txt.split(";")) {
+                val kv = part.split(":")
+                if (kv.size != 2) continue
+                known[kv[0].toInt()] = kv[1].split(",").mapNotNull { it.toIntOrNull() }.toMutableSet()
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "loadKnown", e)
+        }
+    }
+
+    private fun afTick() {
+        val now = SystemClock.elapsedRealtime()
+        if (demo || !softAf || isAm || scanning || source != 1) {
+            if (searching) searching = false
+            lockPi = 0; piSince = 0; lostSince = 0
+            return
+        }
+        if (now - userT < USER_GRACE_MS) return
+        write(RDS, 255, quiet = true)  // osvjezi PI i zastavice
+
+        if (searching) {
+            if (pi != 0 && pi == lockPi && now - candT >= 1500) {
+                searching = false
+                lockFreq = freq
+                piSince = now
+                lostSince = 0
+                cooldownUntil = now + 10_000
+                afNote = "AF: " + format(origin) + " \u2192 " + format(freq)
+                log("AF ok ${origin} -> $freq PI ${String.format(Locale.US, "%04X", pi)}")
+                changed()
+            } else if (now - candT >= CANDIDATE_MS) {
+                nextCandidate(now)
+            }
+            return
+        }
+
+        if (pi != 0) {
+            if (piSince == 0L) piSince = now
+            if (now - piSince >= LOCK_MS && (lockPi != pi || lockFreq != freq)) {
+                lockPi = pi; lockFreq = freq; lockStereo = stereo
+                learn(pi, freq)
+            }
+            lostSince = 0
+            if (lockPi == pi && lockFreq == freq && afNote.isNotEmpty() && now - piSince > 30_000) {
+                afNote = ""
+                changed()
+            }
+        } else {
+            piSince = 0
+        }
+        val weak = pi == 0 || (lockStereo && !stereo)
+        if (lockPi != 0 && lockFreq == freq && weak) {
+            if (lostSince == 0L) lostSince = now
+            else if (now - lostSince >= LOSS_MS && now >= cooldownUntil) startSearch(now)
+        } else if (!weak) {
+            lostSince = 0
+        }
+    }
+
+    private fun startSearch(now: Long) {
+        val cands = (known[lockPi] ?: emptySet<Int>())
+            .filter { it != freq && it in min..max }
+            .sortedBy { abs(it - freq) }
+        if (cands.isEmpty()) {
+            cooldownUntil = now + 20_000
+            afNote = "AF: no known frequency for PI " + String.format(Locale.US, "%04X", lockPi)
+            log("AF none for PI ${String.format(Locale.US, "%04X", lockPi)}")
+            changed()
+            return
+        }
+        queue = cands
+        qi = -1
+        origin = freq
+        searching = true
+        log("AF search ${cands.joinToString(",")} from $origin")
+        nextCandidate(now)
+    }
+
+    private fun nextCandidate(now: Long) {
+        qi++
+        pi = 0
+        candT = now
+        if (qi >= queue.size) {
+            searching = false
+            cooldownUntil = now + 20_000
+            lostSince = 0
+            afNote = "AF: no better signal"
+            write(FREQ, 255, origin)
+            log("AF back to $origin")
+        } else {
+            write(FREQ, 255, queue[qi])
+        }
+        changed()
+    }
+
+    // ---------------- log sirovih poruka (za dijagnostiku)
+
+    private val logLines = ArrayList<String>()
+    private val lastRx = HashMap<Int, String>()
+
+    private fun log(s: String) {
+        val t = SystemClock.elapsedRealtime() / 1000.0
+        logLines.add(String.format(Locale.US, "%8.1f  %s", t, s))
+        if (logLines.size > 400) logLines.removeAt(0)
+    }
+
+    fun logText(last: Int = 400): String = logLines.takeLast(last).joinToString("\n")
 
     // ---------------- demo (emulator): glumi MCU da se vidi sucelje
 

@@ -167,3 +167,141 @@ class Strip(ctx: Context) : HorizontalScrollView(ctx) {
         overScrollMode = OVER_SCROLL_NEVER
     }
 }
+
+// ---------------------------------------------------------------- logo, stranice, log
+
+/** Okvir s logotipom stanice. Bez slike pokazuje ime stanice. */
+@SuppressLint("ViewConstructor")
+class LogoView(ctx: Context, theme: Theme) : View(ctx), Scalable {
+    private val frame = FrameDrawable(theme.accent)
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private var bmp: android.graphics.Bitmap? = null
+    private var label = ""
+
+    fun set(b: android.graphics.Bitmap?, ps: String) {
+        if (b !== bmp || ps != label) {
+            bmp = b
+            label = ps
+            invalidate()
+        }
+    }
+
+    override fun onScale(scale: Float) {
+        frame.border = 10f * scale
+    }
+
+    override fun onDraw(c: Canvas) {
+        frame.setBounds(0, 0, width, height)
+        frame.draw(c)
+        val pad = width * 0.1f
+        val bw = width - 2 * pad
+        val bh = height - 2 * pad
+        val b = bmp
+        if (b != null) {
+            val k = minOf(bw / b.width, bh / b.height)
+            val w = b.width * k
+            val h = b.height * k
+            val l = (width - w) / 2f
+            val t = (height - h) / 2f
+            c.drawBitmap(b, null, android.graphics.RectF(l, t, l + w, t + h), p)
+        } else {
+            p.color = 0xFFD9D9D9.toInt()
+            p.textAlign = Paint.Align.CENTER
+            val txt = label.ifEmpty { "FM" }
+            p.textSize = (bw / (txt.length.coerceAtLeast(3) * 0.62f)).coerceAtMost(height * 0.32f)
+            c.drawText(txt, width / 2f, height / 2f - (p.descent() + p.ascent()) / 2f, p)
+        }
+    }
+}
+
+/** Tockice ispod liste: koja je stranica spremljenih stanica aktivna. */
+@SuppressLint("ViewConstructor")
+class PageDots(ctx: Context, private val theme: Theme, private val count: Int) : View(ctx) {
+    var page = 0
+        set(v) {
+            field = v
+            invalidate()
+        }
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    override fun onDraw(c: Canvas) {
+        val r = height * 0.28f
+        val gap = height * 1.0f
+        val total = (count - 1) * gap
+        val x0 = (width - total) / 2f
+        for (i in 0 until count) {
+            p.color = if (i == page) theme.accent else 0xFF4A5058.toInt()
+            c.drawCircle(x0 + i * gap, height / 2f, if (i == page) r * 1.25f else r, p)
+        }
+    }
+}
+
+/** Lista koja se uvijek zaustavi na cijeloj stranici (sirina = jedna stranica). */
+class PagedStrip(ctx: Context, private val onPage: (Int) -> Unit) : HorizontalScrollView(ctx) {
+    var pages = 1
+    var page = 0
+        private set
+    private var flung = false
+
+    init {
+        isHorizontalScrollBarEnabled = false
+        overScrollMode = OVER_SCROLL_NEVER
+    }
+
+    private fun nearest() = if (width > 0) Math.round(scrollX / width.toFloat()) else 0
+
+    fun goTo(p: Int, smooth: Boolean = true) {
+        val t = p.coerceIn(0, (pages - 1).coerceAtLeast(0))
+        val changed = t != page
+        page = t
+        if (smooth) smoothScrollTo(t * width, 0) else scrollTo(t * width, 0)
+        if (changed) onPage(t)
+    }
+
+    override fun fling(velocityX: Int) {
+        flung = true
+        goTo(if (velocityX > 600) page + 1 else if (velocityX < -600) page - 1 else nearest())
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        val r = super.onTouchEvent(e)
+        if (e.actionMasked == MotionEvent.ACTION_DOWN) flung = false
+        if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) {
+            if (!flung) goTo(nearest())
+            flung = false
+        }
+        return r
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        scrollTo(page * w, 0)
+    }
+}
+
+/** Tekst loga u monospace fontu koji se skrola. */
+class LogView(ctx: Context) : android.widget.ScrollView(ctx), Scalable {
+    private val tv = android.widget.TextView(ctx).apply {
+        typeface = android.graphics.Typeface.MONOSPACE
+        setTextColor(0xFFD9D9D9.toInt())
+    }
+
+    init {
+        addView(tv)
+        isVerticalScrollBarEnabled = false
+        setBackgroundColor(0x66000000)
+    }
+
+    override fun onScale(scale: Float) {
+        tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, 30f * scale)
+        val pad = (16f * scale).toInt()
+        tv.setPadding(pad, pad, pad, pad)
+    }
+
+    fun show(text: String) {
+        val atBottom = tv.height - height - scrollY < 80
+        tv.text = text
+        if (atBottom) post { fullScroll(View.FOCUS_DOWN) }
+    }
+}

@@ -195,10 +195,9 @@ class RadioActivity : Activity() {
         val seekUp = content.add(GButton(this, "▶", theme, 64f), 1500, 330, 150, 150)
         holdToStep(seekUp, { Tuner.seekUp() }, { Tuner.stepUp() })
         logo = content.add(LogoView(this, theme), 340, 190, 420, 420)
-        // isti okvir za frekvenciju i ime: bez RDS-a frekvencija je velika u sredini,
-        // s RDS-om ime je veliko gore, a frekvencija manja ispod
+        // bez RDS-a frekvencija je velika u sredini; s RDS-om frekvencija je mala gore, a ime veliko ispod
         freqText = content.add(GText(this, "", 170f, Gravity.CENTER), 800, 190, 660, 300)
-        psText = content.add(GText(this, "", 125f, Gravity.CENTER), 800, 190, 660, 160)
+        psText = content.add(GText(this, "", 125f, Gravity.CENTER), 800, 300, 660, 170)
         psText.highlight = true
         rtText = content.add(GText(this, "", 44f, Gravity.CENTER, plainColor = 0xFFB7B7B7.toInt()), 800, 495, 660, 65)
         rtText.ellipsize = TextUtils.TruncateAt.MARQUEE
@@ -306,7 +305,7 @@ class RadioActivity : Activity() {
     }
 
     /**
-     * Stigao (ili nestao) RDS: ime se pojavi odozdo, a frekvencija se smanji i spusti ispod njega.
+     * Stigao (ili nestao) RDS: frekvencija se smanji i ode gore kao natpis, a veliko ime se pojavi ispod nje.
      * Prvi put (otvaranje ekrana) bez animacije.
      */
     private fun setRds(on: Boolean) {
@@ -319,8 +318,8 @@ class RadioActivity : Activity() {
         rdsShown = on
         val lift = psText.height * 0.15f
         freqText.animate()
-            .scaleX(if (on) 0.6f else 1f).scaleY(if (on) 0.6f else 1f)
-            .translationY(if (on) freqText.height * 0.32f else 0f)
+            .scaleX(if (on) 0.45f else 1f).scaleY(if (on) 0.45f else 1f)
+            .translationY(if (on) -freqText.height * 0.33f else 0f)
             .setInterpolator(easeInOut).setStartDelay(0).setDuration(if (first) 0L else 260L).start()
         if (on) {
             if (!first) {

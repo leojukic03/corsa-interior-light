@@ -172,10 +172,20 @@ class DesignLayout(
 open class GText(
     ctx: Context,
     text: CharSequence,
-    private val sizePx: Float,
+    sizePx: Float,
     gravity: Int = Gravity.START or Gravity.CENTER_VERTICAL,
     private val plainColor: Int? = null,
 ) : TextView(ctx), Scalable {
+
+    private var lastScale = 0f
+
+    /** Velicina teksta u px dizajna; moze se mijenjati u hodu (npr. vece ime kad stigne RDS). */
+    var sizePx = sizePx
+        set(v) {
+            if (field == v) return
+            field = v
+            if (lastScale > 0f) setTextSize(TypedValue.COMPLEX_UNIT_PX, v * lastScale)
+        }
 
     var highlight = false
         set(v) {
@@ -214,6 +224,7 @@ open class GText(
     }
 
     override fun onScale(scale: Float) {
+        lastScale = scale
         setTextSize(TypedValue.COMPLEX_UNIT_PX, sizePx * scale)
     }
 

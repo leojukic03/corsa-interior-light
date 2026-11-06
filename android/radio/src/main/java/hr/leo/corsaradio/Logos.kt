@@ -14,6 +14,7 @@ import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
 import java.util.concurrent.Executors
+import kotlin.math.abs
 
 /**
  * Logotipi stanica.
@@ -109,9 +110,43 @@ object Logos {
         return "https://commons.wikimedia.org/wiki/Special:FilePath/HR${m.groupValues[3]}_logo.jpg?width=400"
     }
 
+    /** Odreze jednolicni rub (prozirni ili iste boje kao kut), da logo popuni okvir. */
+    private fun trim(src: Bitmap): Bitmap {
+        val w = src.width
+        val h = src.height
+        val px = IntArray(w * h)
+        src.getPixels(px, 0, w, 0, 0, w, h)
+        val bg = px[0]
+        fun same(c: Int): Boolean {
+            val a1 = c ushr 24
+            val a0 = bg ushr 24
+            if (a1 < 24 && a0 < 24) return true
+            return abs(a1 - a0) < 24 &&
+                abs(((c shr 16) and 255) - ((bg shr 16) and 255)) < 28 &&
+                abs(((c shr 8) and 255) - ((bg shr 8) and 255)) < 28 &&
+                abs((c and 255) - (bg and 255)) < 28
+        }
+        var top = 0; var bottom = h - 1; var left = 0; var right = w - 1
+        fun rowEmpty(y: Int) = (0 until w).all { same(px[y * w + it]) }
+        fun colEmpty(x: Int) = (top..bottom).all { same(px[it * w + x]) }
+        while (top < bottom && rowEmpty(top)) top++
+        while (bottom > top && rowEmpty(bottom)) bottom--
+        while (left < right && colEmpty(left)) left++
+        while (right > left && colEmpty(right)) right--
+        val cw = right - left + 1
+        val ch = bottom - top + 1
+        if (cw < 16 || ch < 16 || (cw == w && ch == h)) return src
+        // malo zraka oko loga
+        val m = (maxOf(cw, ch) * 0.04f).toInt()
+        val l = (left - m).coerceAtLeast(0)
+        val t = (top - m).coerceAtLeast(0)
+        return Bitmap.createBitmap(src, l, t, (right + m).coerceAtMost(w - 1) - l + 1, (bottom + m).coerceAtMost(h - 1) - t + 1)
+    }
+
     private fun save(bytes: ByteArray, out: File): Boolean {
-        val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return false
-        if (bmp.width < 32 || bmp.height < 32) return false
+        val raw = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return false
+        if (raw.width < 32 || raw.height < 32) return false
+        val bmp = trim(raw)
         out.parentFile?.mkdirs()
         out.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         return true

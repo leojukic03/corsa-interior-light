@@ -305,3 +305,86 @@ class LogView(ctx: Context) : android.widget.ScrollView(ctx), Scalable {
         if (atBottom) post { fullScroll(View.FOCUS_DOWN) }
     }
 }
+
+/** Spremljena stanica: logo gore, ime (ili frekvencija) ispod. Bez loga gore pise frekvencija. */
+@SuppressLint("ViewConstructor", "ClickableViewAccessibility")
+class PresetTile(ctx: Context, private val theme: Theme) : View(ctx), Scalable {
+    private val frame = FrameDrawable(theme.accent)
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private var s = 0.5f
+    private var bmp: android.graphics.Bitmap? = null
+    private var name = ""
+    private var freq = ""
+    var active = false
+        set(v) { if (field != v) { field = v; invalidate() } }
+
+    init {
+        isClickable = true
+        isLongClickable = true
+    }
+
+    fun set(b: android.graphics.Bitmap?, name: String, freq: String) {
+        if (b !== bmp || name != this.name || freq != this.freq) {
+            bmp = b
+            this.name = name
+            this.freq = freq
+            invalidate()
+        }
+    }
+
+    override fun onScale(scale: Float) {
+        s = scale
+        frame.border = 10f * scale
+    }
+
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> { frame.pressed = true; invalidate() }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { frame.pressed = false; invalidate() }
+        }
+        return super.onTouchEvent(e)
+    }
+
+    private fun fit(text: String, maxW: Float): String {
+        if (p.measureText(text) <= maxW) return text
+        var t = text
+        while (t.length > 1 && p.measureText("$t…") > maxW) t = t.dropLast(1)
+        return "$t…"
+    }
+
+    override fun onDraw(c: Canvas) {
+        frame.accent = theme.accent
+        frame.setBounds(0, 0, width, height)
+        frame.draw(c)
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val pad = 22f * s
+        val logoBottom = h * 0.68f
+        p.textAlign = Paint.Align.CENTER
+        val b = bmp
+        if (b != null) {
+            val bw = w - 2 * pad
+            val bh = logoBottom - 2 * pad
+            val k = minOf(bw / b.width, bh / b.height)
+            val dw = b.width * k
+            val dh = b.height * k
+            val l = (w - dw) / 2f
+            val t = pad + (bh - dh) / 2f
+            c.drawBitmap(b, null, android.graphics.RectF(l, t, l + dw, t + dh), p)
+        } else if (freq.isNotEmpty()) {
+            p.color = 0xFFD9D9D9.toInt()
+            p.textSize = 64f * s
+            c.drawText(freq, w / 2f, logoBottom / 2f + pad / 2 - (p.descent() + p.ascent()) / 2f, p)
+        }
+        // ime ispod
+        p.textSize = 38f * s
+        p.color = if (active) mix(theme.accent, Color.WHITE, 0.25f) else 0xFFB7B7B7.toInt()
+        val label = fit(name.ifEmpty { if (freq.isEmpty()) "—" else "" }, w - 2 * pad)
+        val y = (logoBottom + h - pad) / 2f - (p.descent() + p.ascent()) / 2f
+        c.drawText(label, w / 2f, y, p)
+        if (active) {  // svjetla crta na dnu za trenutnu stanicu
+            p.color = theme.accent
+            c.drawRect(w * 0.25f, h - pad * 0.9f, w * 0.75f, h - pad * 0.6f, p)
+        }
+    }
+}

@@ -10,6 +10,7 @@ import android.text.style.RelativeSizeSpan
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.View
+import android.view.animation.PathInterpolator
 import android.widget.ImageView
 import android.widget.Toast
 import hr.leo.corsaradio.ui.ButtonRow
@@ -58,7 +59,10 @@ class RadioActivity : Activity() {
     private lateinit var pager: PagedStrip
     private lateinit var dots: PageDots
     private val presetButtons = ArrayList<PresetTile>()
-    private lateinit var dialBack: View
+    private lateinit var content: DesignLayout
+    private var rdsShown: Boolean? = null
+    private val easeOut = PathInterpolator(0.23f, 1f, 0.32f, 1f)        // ulaz / izlaz
+    private val easeInOut = PathInterpolator(0.77f, 0f, 0.175f, 1f)    // pomicanje po ekranu
     private var dialOpen = false
     private val hideDial = Runnable { showDial(false) }
     private var lastPreset = -2
@@ -180,26 +184,30 @@ class RadioActivity : Activity() {
         @Suppress("DEPRECATION")
         back.setOnClickListener { onBackPressed() }
 
+        // sav sadrzaj ispod zaglavlja je u jednom rasporedu, da ga skala moze gurnuti dolje i smanjiti
+        content = DesignLayout(this, theme, fixedScale = { d.scale })
+        d.add(content, 0, 0, 1800, 1200, DesignLayout.Span.FULL_WIDTH)
+
         // [<]  veliki logo | ime stanice (veliko kad stigne RDS) + frekvencija  [>]
         // dodir = sljedeca stanica, drzanje = korak po korak
-        val seekDown = d.add(GButton(this, "◀", theme, 64f), 150, 330, 150, 150)
+        val seekDown = content.add(GButton(this, "◀", theme, 64f), 150, 330, 150, 150)
         holdToStep(seekDown, { Tuner.seekDown() }, { Tuner.stepDown() })
-        val seekUp = d.add(GButton(this, "▶", theme, 64f), 1500, 330, 150, 150)
+        val seekUp = content.add(GButton(this, "▶", theme, 64f), 1500, 330, 150, 150)
         holdToStep(seekUp, { Tuner.seekUp() }, { Tuner.stepUp() })
-        logo = d.add(LogoView(this, theme), 340, 190, 420, 420)
+        logo = content.add(LogoView(this, theme), 340, 190, 420, 420)
         // isti okvir za frekvenciju i ime: bez RDS-a frekvencija je velika u sredini,
         // s RDS-om ime je veliko gore, a frekvencija manja ispod
-        freqText = d.add(GText(this, "", 170f, Gravity.CENTER), 800, 190, 660, 300)
-        psText = d.add(GText(this, "", 110f, Gravity.CENTER), 800, 190, 660, 150)
+        freqText = content.add(GText(this, "", 170f, Gravity.CENTER), 800, 190, 660, 300)
+        psText = content.add(GText(this, "", 125f, Gravity.CENTER), 800, 190, 660, 160)
         psText.highlight = true
-        rtText = d.add(GText(this, "", 44f, Gravity.CENTER, plainColor = 0xFFB7B7B7.toInt()), 800, 495, 660, 65)
+        rtText = content.add(GText(this, "", 44f, Gravity.CENTER, plainColor = 0xFFB7B7B7.toInt()), 800, 495, 660, 65)
         rtText.ellipsize = TextUtils.TruncateAt.MARQUEE
         rtText.marqueeRepeatLimit = -1
         rtText.setSingleLine()
         rtText.isSelected = true
 
         // oznake: ST, LOC/DX, AF, TA, TP (mijenjaju se u izborniku, ovdje su samo pokazatelji)
-        fun flag(label: String, i: Int): GText = d.add(GText(this, label, 44f, Gravity.CENTER), 805 + i * 132, 565, 120, 60)
+        fun flag(label: String, i: Int): GText = content.add(GText(this, label, 44f, Gravity.CENTER), 805 + i * 132, 565, 120, 60)
         stereo = flag("ST", 0)
         local = flag("DX", 1)
         af = flag("AF", 2)
@@ -208,8 +216,8 @@ class RadioActivity : Activity() {
 
         // spremljene stanice: 5 odjednom (logo + ime), povuci za sljedecih 5. Dodir = slusaj, drzanje = spremi
         val pages = (Tuner.presets.size + perPage - 1) / perPage
-        pager = d.add(PagedStrip(this) { dots.page = it }, 0, 705, 1800, 345)
-        dots = d.add(PageDots(this, theme, pages), 700, 1080, 400, 40)
+        pager = content.add(PagedStrip(this) { dots.page = it }, 0, 705, 1800, 345)
+        dots = content.add(PageDots(this, theme, pages), 700, 1080, 400, 40)
         pager.pages = pages
         val row = ButtonRow(this, scale = { d.scale }, w = 340f, h = 335f, pitch = 360f, padStart = 10f)
         repeat(Tuner.presets.size) { i ->
@@ -227,10 +235,8 @@ class RadioActivity : Activity() {
         repeat(pages * perPage - Tuner.presets.size) { row.addView(View(this)) }
         pager.addView(row)
 
-        // skala za ugadanje: iskoci ispod zaglavlja na tipku Tune, sama se skrije nakon 8 s
-        dialBack = d.add(View(this).apply { setBackgroundColor(Color.BLACK); isClickable = true }, 0, 153, 1800, 250, DesignLayout.Span.FULL_WIDTH)
+        // skala za ugadanje: na tipku Tune izade ispod zaglavlja i gurne sadrzaj dolje; sama se skrije nakon 8 s
         dial = d.add(FreqDial(this, theme) { Tuner.tune(it); showDial(true) }, 150, 175, 1500, 200)
-        dialBack.visibility = View.GONE
         dial.visibility = View.GONE
 
         buildMenu()
@@ -271,13 +277,64 @@ class RadioActivity : Activity() {
         hidden(logItems, GButton(this, "Back", theme, 56f), 1170, 870, 480, 150).setOnClickListener { logOpen = false; applyMenu() }
     }
 
+    /** Skala izade odozgo (ease-out), a sadrzaj se istovremeno spusti i smanji, da sve ostane vidljivo. */
     private fun showDial(open: Boolean) {
-        dialOpen = open
-        dialBack.visibility = if (open) View.VISIBLE else View.GONE
-        dial.visibility = if (open) View.VISIBLE else View.GONE
         d.removeCallbacks(hideDial)
         if (open) d.postDelayed(hideDial, 8000)
+        if (open == dialOpen) return
+        dialOpen = open
+        val s = d.scale
+        content.pivotX = content.width / 2f
+        content.pivotY = 190f * s  // vrh sadrzaja ostaje poravnat, sve ispod se skupi
+        content.animate()
+            .scaleX(if (open) 0.82f else 1f).scaleY(if (open) 0.82f else 1f)
+            .translationY(if (open) 215f * s else 0f)
+            .setInterpolator(easeInOut).setDuration(280).start()
+        dial.animate().cancel()
+        if (open) {
+            dial.visibility = View.VISIBLE
+            dial.alpha = 0f
+            dial.translationY = -30f * s
+            dial.animate().alpha(1f).translationY(0f)
+                .setInterpolator(easeOut).setStartDelay(100).setDuration(200).start()  // krene kad se sadrzaj vec odmakne
+        } else {
+            dial.animate().alpha(0f).translationY(-30f * s)
+                .setInterpolator(easeOut).setStartDelay(0).setDuration(180)
+                .withEndAction { if (!dialOpen) dial.visibility = View.GONE }.start()
+        }
         update()
+    }
+
+    /**
+     * Stigao (ili nestao) RDS: ime se pojavi odozdo, a frekvencija se smanji i spusti ispod njega.
+     * Prvi put (otvaranje ekrana) bez animacije.
+     */
+    private fun setRds(on: Boolean) {
+        if (rdsShown == on) return
+        if (freqText.height == 0) {  // jos nije rasporedeno: probaj nakon prvog crtanja
+            d.post { update() }
+            return
+        }
+        val first = rdsShown == null
+        rdsShown = on
+        val lift = psText.height * 0.15f
+        freqText.animate()
+            .scaleX(if (on) 0.6f else 1f).scaleY(if (on) 0.6f else 1f)
+            .translationY(if (on) freqText.height * 0.32f else 0f)
+            .setInterpolator(easeInOut).setStartDelay(0).setDuration(if (first) 0L else 260L).start()
+        if (on) {
+            if (!first) {
+                psText.alpha = 0f
+                psText.translationY = lift
+                psText.scaleX = 0.96f
+                psText.scaleY = 0.96f
+            }
+            psText.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
+                .setInterpolator(easeOut).setStartDelay(if (first) 0L else 60L).setDuration(if (first) 0L else 240L).start()
+        } else {
+            psText.animate().alpha(0f).translationY(lift)
+                .setInterpolator(easeOut).setStartDelay(0).setDuration(if (first) 0L else 180L).start()
+        }
     }
 
     private fun applyMenu() {
@@ -330,11 +387,9 @@ class RadioActivity : Activity() {
             else -> "FM1"
         }
 
-        val rds = t.ps.isNotEmpty()
-        psText.text = t.ps
-        psText.sizePx = if (t.ps.length > 7) 90f else 110f
-        freqText.sizePx = if (rds) 100f else 170f
-        freqText.gravity = if (rds) Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL else Gravity.CENTER
+        if (t.ps.isNotEmpty()) psText.text = t.ps  // kod nestanka RDS-a ime ostane dok se ne izgubi
+        psText.sizePx = if (t.ps.length > 7) 100f else 125f
+        setRds(t.ps.isNotEmpty())
         if (t.freq != 0) {
             val num = fmt(t.freq)
             val s = SpannableString("$num ${if (t.isAm) "kHz" else "MHz"}")
@@ -344,7 +399,7 @@ class RadioActivity : Activity() {
             freqText.text = ""
         }
         if (rtText.text.toString() != t.radioText) rtText.text = t.radioText
-        logo.set(Logos.find(this, t.pi, t.ps), t.ps)
+        logo.set(Logos.find(this, t.pi, t.ps), t.ps.ifEmpty { if (t.isAm) "AM" else "FM" })
 
         fun on(v: GText, active: Boolean) {
             v.highlight = active

@@ -164,16 +164,16 @@ class RadioActivity : Activity() {
         d.add(GradientView(this, glow, clear, horizontal = true), 0, 0, 263, 1200, DesignLayout.Span.LEFT_EDGE)
         d.add(GradientView(this, clear, glow, horizontal = true), 1537, 0, 263, 1200, DesignLayout.Span.RIGHT_EDGE)
 
-        // zaglavlje: naslov | band | menu | natrag
+        // zaglavlje: naslov | band | tune | menu | natrag
         d.add(GradientView(this, headerOf(accent), withAlpha(headerOf(accent), 0.2f), horizontal = false), 0, 0, 1800, 148, DesignLayout.Span.FULL_WIDTH)
         d.add(GlowLine(this, vertical = false), 0, 143, 1800, 10, DesignLayout.Span.FULL_WIDTH)
         title = d.add(GText(this, "Radio", 64f), 71, 10, 560, 120)
         d.add(GlowLine(this, vertical = true), 640, 1, 10, 140)
-        val tune = d.add(GText(this, "Tune", 64f, Gravity.CENTER, plainColor = 0xFFD9D9D9.toInt()), 650, 10, 287, 120)
-        tune.setOnClickListener { showDial(!dialOpen) }
-        d.add(GlowLine(this, vertical = true), 937, 1, 10, 140)
-        bandLabel = d.add(GText(this, "FM1", 64f, Gravity.CENTER, plainColor = 0xFFD9D9D9.toInt()), 950, 10, 316, 120)
+        bandLabel = d.add(GText(this, "FM1", 64f, Gravity.CENTER, plainColor = 0xFFD9D9D9.toInt()), 650, 10, 287, 120)
         bandLabel.setOnClickListener { Tuner.nextBand() }
+        d.add(GlowLine(this, vertical = true), 937, 1, 10, 140)
+        val tune = d.add(GText(this, "Tune", 64f, Gravity.CENTER, plainColor = 0xFFD9D9D9.toInt()), 950, 10, 316, 120)
+        tune.setOnClickListener { showDial(!dialOpen) }
         d.add(GlowLine(this, vertical = true), 1266, 1, 10, 130)
         val menu = d.add(GText(this, "Menu", 64f, Gravity.CENTER, plainColor = 0xFFD9D9D9.toInt()), 1276, 10, 247, 120)
         menu.setOnClickListener { menuOpen = true; logOpen = false; applyMenu() }

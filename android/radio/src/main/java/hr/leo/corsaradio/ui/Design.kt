@@ -318,8 +318,16 @@ class GButton(ctx: Context, text: CharSequence, theme: Theme, sizePx: Float = 64
         isClickable = true
         setOnTouchListener { _, e ->
             when (e.action) {
-                MotionEvent.ACTION_DOWN -> { frame.pressed = true; invalidate() }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { frame.pressed = false; invalidate() }
+                MotionEvent.ACTION_DOWN -> {  // odziv na dodir odmah
+                    frame.pressed = true
+                    invalidate()
+                    animate().scaleX(0.97f).scaleY(0.97f).setDuration(100).setInterpolator(pressEase).start()
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    frame.pressed = false
+                    invalidate()
+                    animate().scaleX(1f).scaleY(1f).setDuration(160).setInterpolator(pressEase).start()
+                }
             }
             false
         }

@@ -236,42 +236,97 @@ class PageDots(ctx: Context, private val theme: Theme, private val count: Int) :
     }
 }
 
-/** Lista koja se uvijek zaustavi na cijeloj stranici (sirina = jedna stranica). */
+/**
+ * Lista koja se uvijek zaustavi na cijeloj stranici (sirina = jedna stranica).
+ * Prati prst 1:1, a na otpustanju projicira zamah (kao iOS) i odabere stranicu prema tome kamo
+ * je potez isao, pa do nje dode kriticno prigusenom oprugom koja preuzme brzinu prsta.
+ * Dodir usred animacije je odmah uhvati (moze se prekinuti i vratiti).
+ */
 class PagedStrip(ctx: Context, private val onPage: (Int) -> Unit) : HorizontalScrollView(ctx) {
     var pages = 1
     var page = 0
         private set
     private var flung = false
 
+    // opruga: kriticno prigusena (bez prebacivanja), odziv 0.35 s
+    private val omega = (2 * Math.PI / 0.35).toFloat()
+    private var springFrom = 0f
+    private var springV = 0f
+    private var springTarget = 0f
+    private var springStart = 0L
+    private var springing = false
+    private val tick = object : Runnable {
+        override fun run() {
+            if (!springing) return
+            val t = (android.os.SystemClock.uptimeMillis() - springStart) / 1000f
+            val x0 = springFrom - springTarget
+            val x = springTarget + (x0 + (springV + omega * x0) * t) * Math.exp((-omega * t).toDouble()).toFloat()
+            if (t > 1.5f || Math.abs(x - springTarget) < 0.5f && t > 0.1f) {
+                scrollTo(springTarget.toInt(), 0)
+                springing = false
+                return
+            }
+            scrollTo(Math.round(x), 0)
+            postOnAnimation(this)
+        }
+    }
+
     init {
         isHorizontalScrollBarEnabled = false
         overScrollMode = OVER_SCROLL_NEVER
     }
 
-    private fun nearest() = if (width > 0) Math.round(scrollX / width.toFloat()) else 0
+    private fun motionOff(): Boolean =
+        android.os.Build.VERSION.SDK_INT >= 26 && !android.animation.ValueAnimator.areAnimatorsEnabled()
 
-    fun goTo(p: Int, smooth: Boolean = true) {
+    /** Kamo bi zamah odnio listu (Appleova projekcija, deceleracija 0.998). */
+    private fun project(v: Float) = v / 1000f * 0.998f / (1f - 0.998f)
+
+    fun goTo(p: Int, smooth: Boolean = true, velocity: Float = 0f) {
         val t = p.coerceIn(0, (pages - 1).coerceAtLeast(0))
         val changed = t != page
         page = t
-        if (smooth) smoothScrollTo(t * width, 0) else scrollTo(t * width, 0)
+        if (!smooth || width == 0 || motionOff()) {
+            springing = false
+            scrollTo(t * width, 0)
+        } else {
+            springFrom = scrollX.toFloat()
+            springTarget = (t * width).toFloat()
+            springV = velocity
+            springStart = android.os.SystemClock.uptimeMillis()
+            if (!springing) {
+                springing = true
+                postOnAnimation(tick)
+            }
+        }
         if (changed) onPage(t)
     }
 
     override fun fling(velocityX: Int) {
         flung = true
-        goTo(if (velocityX > 600) page + 1 else if (velocityX < -600) page - 1 else nearest())
+        val w = width.coerceAtLeast(1)
+        val projected = scrollX + project(velocityX.toFloat())
+        val target = Math.round(projected / w).coerceIn(page - 1, page + 1)  // najvise jedna stranica po potezu
+        goTo(target, velocity = velocityX.toFloat())
     }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (e.actionMasked == MotionEvent.ACTION_DOWN) {
+            springing = false  // uhvati listu tamo gdje je sad
+            flung = false
+        }
         val r = super.onTouchEvent(e)
-        if (e.actionMasked == MotionEvent.ACTION_DOWN) flung = false
         if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) {
-            if (!flung) goTo(nearest())
+            if (!flung) goTo(if (width > 0) Math.round(scrollX / width.toFloat()) else 0)
             flung = false
         }
         return r
+    }
+
+    override fun onInterceptTouchEvent(e: MotionEvent): Boolean {
+        if (e.actionMasked == MotionEvent.ACTION_DOWN) springing = false
+        return super.onInterceptTouchEvent(e)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -339,8 +394,16 @@ class PresetTile(ctx: Context, private val theme: Theme) : View(ctx), Scalable {
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
         when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { frame.pressed = true; invalidate() }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { frame.pressed = false; invalidate() }
+            MotionEvent.ACTION_DOWN -> {  // odziv na dodir odmah, ne na otpustanje
+                frame.pressed = true
+                invalidate()
+                animate().scaleX(0.97f).scaleY(0.97f).setDuration(100).setInterpolator(pressEase).start()
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                frame.pressed = false
+                invalidate()
+                animate().scaleX(1f).scaleY(1f).setDuration(160).setInterpolator(pressEase).start()
+            }
         }
         return super.onTouchEvent(e)
     }
@@ -374,10 +437,12 @@ class PresetTile(ctx: Context, private val theme: Theme) : View(ctx), Scalable {
         } else if (freq.isNotEmpty()) {
             p.color = 0xFFD9D9D9.toInt()
             p.textSize = 64f * s
+            p.letterSpacing = -0.01f
             c.drawText(freq, w / 2f, logoBottom / 2f + pad / 2 - (p.descent() + p.ascent()) / 2f, p)
         }
-        // ime ispod
+        // ime ispod (sitni tekst: malo razmaknutiji)
         p.textSize = 38f * s
+        p.letterSpacing = 0.02f
         p.color = if (active) mix(theme.accent, Color.WHITE, 0.25f) else 0xFFB7B7B7.toInt()
         val label = fit(name.ifEmpty { if (freq.isEmpty()) "—" else "" }, w - 2 * pad)
         val y = (logoBottom + h - pad) / 2f - (p.descent() + p.ascent()) / 2f
@@ -388,3 +453,6 @@ class PresetTile(ctx: Context, private val theme: Theme) : View(ctx), Scalable {
         }
     }
 }
+
+/** Krivulja za stisak gumba (jaki ease-out). */
+val pressEase = android.view.animation.PathInterpolator(0.23f, 1f, 0.32f, 1f)

@@ -61,6 +61,8 @@ class RadioActivity : Activity() {
     private val presetButtons = ArrayList<PresetTile>()
     private lateinit var content: DesignLayout
     private var rdsShown: Boolean? = null
+    private var shownFreq = 0
+    private var shownBand = -1
     private val easeOut = PathInterpolator(0.23f, 1f, 0.32f, 1f)        // ulaz / izlaz
     private val easeInOut = PathInterpolator(0.77f, 0f, 0.175f, 1f)    // pomicanje po ekranu
     private var dialOpen = false
@@ -199,6 +201,9 @@ class RadioActivity : Activity() {
         freqText = content.add(GText(this, "", 170f, Gravity.CENTER), 800, 190, 660, 300)
         psText = content.add(GText(this, "", 125f, Gravity.CENTER), 800, 300, 660, 170)
         psText.highlight = true
+        // tracking po velicini: veliki tekst malo stisnutiji, sitni malo razmaknutiji
+        psText.letterSpacing = -0.02f
+        freqText.letterSpacing = -0.02f
         rtText = content.add(GText(this, "", 44f, Gravity.CENTER, plainColor = 0xFFB7B7B7.toInt()), 800, 495, 660, 65)
         rtText.ellipsize = TextUtils.TruncateAt.MARQUEE
         rtText.marqueeRepeatLimit = -1
@@ -206,7 +211,8 @@ class RadioActivity : Activity() {
         rtText.isSelected = true
 
         // oznake: ST, LOC/DX, AF, TA, TP (mijenjaju se u izborniku, ovdje su samo pokazatelji)
-        fun flag(label: String, i: Int): GText = content.add(GText(this, label, 44f, Gravity.CENTER), 805 + i * 132, 565, 120, 60)
+        fun flag(label: String, i: Int): GText =
+            content.add(GText(this, label, 44f, Gravity.CENTER), 805 + i * 132, 565, 120, 60).also { it.letterSpacing = 0.04f }
         stereo = flag("ST", 0)
         local = flag("DX", 1)
         af = flag("AF", 2)
@@ -336,6 +342,26 @@ class RadioActivity : Activity() {
         }
     }
 
+    /**
+     * Nova stanica dolazi iz smjera poteza: na vise frekvencije (▶) zdesna, na nize (◀) slijeva.
+     * Kratak pomak (40 px dizajna) i ease-out, samo logo, ime i RadioText. Promjena banda bez smjera.
+     */
+    private fun stationChanged(freq: Int, band: Int) {
+        val old = shownFreq
+        val sameBand = band == shownBand
+        shownFreq = freq
+        shownBand = band
+        if (old == 0 || freq == 0 || freq == old || !sameBand || logo.width == 0) return
+        val dir = if (freq > old) 1f else -1f
+        val dx = 40f * d.scale * dir
+        for (v in listOf(logo, psText, rtText)) {
+            v.translationX = dx
+            v.animate().translationX(0f).setInterpolator(easeOut).setStartDelay(0).setDuration(240).start()
+        }
+        logo.alpha = 0.5f
+        logo.animate().alpha(1f).setInterpolator(easeOut).setDuration(240).start()
+    }
+
     private fun applyMenu() {
         fun show(list: List<View>, on: Boolean) = list.forEach { it.visibility = if (on) View.VISIBLE else View.GONE }
         show(menuPanel, menuOpen)
@@ -386,6 +412,7 @@ class RadioActivity : Activity() {
             else -> "FM1"
         }
 
+        stationChanged(t.freq, t.band)
         if (t.ps.isNotEmpty()) psText.text = t.ps  // kod nestanka RDS-a ime ostane dok se ne izgubi
         psText.sizePx = if (t.ps.length > 7) 100f else 125f
         setRds(t.ps.isNotEmpty())

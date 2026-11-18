@@ -65,6 +65,12 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
             addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
         })
         registerReceiver(volumeReceiver, IntentFilter("android.media.VOLUME_CHANGED_ACTION"))
+        // poruke drugih aplikacija (Corsa Radio) za TID; mora biti exported jer dolaze izvana
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(tidReceiver, IntentFilter(TidMessage.ACTION), Context.RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(tidReceiver, IntentFilter(TidMessage.ACTION))
+        }
         registerReceiver(metaReceiver, IntentFilter().apply {
             addAction("com.android.music.metachanged")
             addAction("com.android.music.playstatechanged")
@@ -87,6 +93,7 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
         unregisterReceiver(usbReceiver)
         unregisterReceiver(volumeReceiver)
         unregisterReceiver(metaReceiver)
+        unregisterReceiver(tidReceiver)
         settingsObservers.forEach { (_, obs) -> contentResolver.unregisterContentObserver(obs) }
         disconnect()
         writer.shutdown()
@@ -271,6 +278,15 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
     override fun onRunError(e: Exception) {
         if (flashing) return  // citanje je namjerno zaustavljeno za snimanje Arduina
         handler.post { disconnect() }
+    }
+
+    private val tidReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) {
+            TidMessage.command(i.getStringExtra(TidMessage.EXTRA))?.let {
+                Hub.log("TID message: ${it.drop(1)}")
+                send(it)
+            }
+        }
     }
 
     private val usbReceiver = object : BroadcastReceiver() {

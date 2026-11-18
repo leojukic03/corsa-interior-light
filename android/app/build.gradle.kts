@@ -11,8 +11,8 @@ android {
         applicationId = "hr.leo.corsalight"
         minSdk = 21
         targetSdk = 33
-        versionCode = 13
-        versionName = "3.0"
+        versionCode = 14
+        versionName = "3.0.1"
     }
 
     buildTypes {
@@ -34,4 +34,5 @@ android {
 dependencies {
     // USB serial: CH340, FTDI, CP210x, CDC (Arduino Nano i klonovi)
     implementation("com.github.mik3y:usb-serial-for-android:3.8.0")
+    testImplementation("junit:junit:4.13.2")
 }

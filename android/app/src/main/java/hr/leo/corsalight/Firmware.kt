@@ -1,7 +1,6 @@
 package hr.leo.corsalight
 
 import android.content.Context
-import com.hoho.android.usbserial.driver.UsbSerialPort
 
 /**
  * Arduino kod koji aplikacija nosi u sebi (assets/firmware, puni ga arduino/build_firmware.ps1)
@@ -46,19 +45,34 @@ object Firmware {
     class FlashException(msg: String) : Exception(msg)
 
     /**
-     * Snimi sliku na Arduino. Port mora biti otvoren, a nitko drugi ne smije citati s njega.
-     * progress dobiva poruke za dijagnostiku. Vraca true ako je provjera prosla.
+     * Veza prema Arduinu za vrijeme snimanja. Bajtove NE cita sam snimac: knjiznica usb-serial
+     * gubi podatke kad se cita s kratkim timeoutom (do ~200 ms, vidi CommonUsbSerialPort.read),
+     * pa se izgubi ili prepolovi odgovor bootloadera i sve iza toga je "out of sync".
+     * Zato bajtove dostavlja stalni citac aplikacije (LinkService), a ovdje ih se samo uzima iz reda.
      */
-    fun flash(port: UsbSerialPort, image: ByteArray, size: Int, progress: (String) -> Unit): Boolean {
-        val stk = Stk(port)
+    interface Wire {
+        fun setBaud(baud: Int)
+        /** DTR i RTS: false pa true resetira ATmegu u bootloader. */
+        fun setLines(on: Boolean)
+        fun write(b: ByteArray)
+        /** Sljedeci primljeni bajt (0-255) ili null ako nista ne stigne za timeoutMs. */
+        fun read(timeoutMs: Long): Int?
+    }
+
+    /**
+     * Snimi sliku na Arduino. Vraca true ako je provjera prosla.
+     * progress dobiva poruke za dijagnostiku.
+     */
+    fun flash(wire: Wire, image: ByteArray, size: Int, progress: (String) -> Unit): Boolean {
+        val stk = Stk(wire)
         for (baud in intArrayOf(115200, 57600)) {  // Uno / novi Nano: 115200, stari Nano: 57600
-            port.setParameters(baud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-            resetIntoBootloader(port)
+            wire.setBaud(baud)
+            resetIntoBootloader(wire)
             if (stk.sync()) {
                 progress("Bootloader found ($baud baud)")
                 val sig = stk.signature()
                 if (!sig.contentEquals(byteArrayOf(0x1E, 0x95.toByte(), 0x0F))) {
-                    throw FlashException("Wrong chip signature: " + sig.joinToString(" ") { "%02X".format(it) })
+                    throw FlashException("Wrong chip signature: " + hex(sig))
                 }
                 stk.cmd(byteArrayOf(0x50))  // ENTER_PROGMODE
                 val pages = (size + PAGE - 1) / PAGE
@@ -84,54 +98,80 @@ object Firmware {
     }
 
     /** Kao avrdude: DTR/RTS dolje, pa gore -> 16U2 / CH340 resetira ATmega u bootloader. */
-    private fun resetIntoBootloader(port: UsbSerialPort) {
+    private fun resetIntoBootloader(wire: Wire) {
         try {
-            port.dtr = false
-            port.rts = false
+            wire.setLines(false)
             Thread.sleep(250)
-            port.dtr = true
-            port.rts = true
+            wire.setLines(true)
             Thread.sleep(50)
         } catch (_: Exception) {
         }
-        drain(port)
+        drain(wire)
     }
 
-    private fun drain(port: UsbSerialPort) {
-        val b = ByteArray(64)
-        try {
-            while (port.read(b, 20) > 0) { /* odbaci stari sadrzaj */ }
-        } catch (_: Exception) {
-        }
+    /** Odbaci sve sto je stiglo dok ne bude 'quietMs' tisine (stari kod, zakasnjeli odgovori). */
+    private fun drain(wire: Wire, quietMs: Long = 60) {
+        var n = 0
+        while (n < 4096 && wire.read(quietMs) != null) n++
     }
+
+    private fun hex(b: ByteArray) = b.joinToString(" ") { "%02X".format(it) }
 
     /** STK500v1, samo naredbe koje optiboot zna. */
-    private class Stk(private val port: UsbSerialPort) {
+    private class Stk(private val wire: Wire) {
         private val EOP = 0x20.toByte()
-        private val INSYNC = 0x14.toByte()
-        private val OK = 0x10.toByte()
+        private val INSYNC = 0x14
+        private val NOSYNC = 0x15
+        private val OK = 0x10
 
+        /**
+         * GET_SYNC dok bootloader ne odgovori, pa jos jednom na cisto: nakon prvog odgovora mogu
+         * stici zakasnjeli odgovori na ranije pokusaje, a oni ne smiju zavrsiti u sljedecoj naredbi.
+         */
         fun sync(): Boolean {
             repeat(10) {
-                try {
-                    port.write(byteArrayOf(0x30, EOP), 200)
-                    val r = read(2, 250)
-                    if (r[0] == INSYNC && r[1] == OK) {
-                        drain()
-                        return true
-                    }
-                } catch (_: Exception) {
+                wire.write(byteArrayOf(0x30, EOP))
+                if (expectSync(300)) {
+                    drain(wire, 100)
+                    wire.write(byteArrayOf(0x30, EOP))
+                    if (expectSync(500)) return true
                 }
             }
             return false
         }
 
-        fun cmd(body: ByteArray, answer: Int = 0): ByteArray {
-            port.write(body + EOP, 500)
-            val r = read(answer + 2, 1000)
-            if (r[0] != INSYNC || r[answer + 1] != OK) throw FlashException("Bootloader out of sync")
-            return r.copyOfRange(1, answer + 1)
+        private fun expectSync(timeoutMs: Long): Boolean {
+            val end = System.currentTimeMillis() + timeoutMs
+            var prev = -1
+            while (true) {
+                val left = end - System.currentTimeMillis()
+                if (left <= 0) return false
+                val b = wire.read(left) ?: return false
+                if (prev == INSYNC && b == OK) return true
+                prev = b
+            }
         }
+
+        fun cmd(body: ByteArray, answer: Int = 0): ByteArray {
+            wire.write(body + EOP)
+            // zalutali bajtovi prije INSYNC se preskacu (najvise 16), NOSYNC znaci da je naredba odbijena
+            var skipped = 0
+            while (true) {
+                val b = next(1000)
+                if (b == INSYNC) break
+                if (b == NOSYNC) throw FlashException("Bootloader said NOSYNC to %02X".format(body[0]))
+                if (++skipped > 16) throw FlashException("Bootloader out of sync (no INSYNC for %02X)".format(body[0]))
+            }
+            val out = ByteArray(answer) { next(1000).toByte() }
+            val last = next(1000)
+            if (last != OK) {
+                throw FlashException("Bootloader out of sync: %02X answered [%s] then %02X".format(body[0], hex(out), last))
+            }
+            return out
+        }
+
+        private fun next(timeoutMs: Long): Int =
+            wire.read(timeoutMs) ?: throw FlashException("Timeout waiting for the bootloader")
 
         fun signature() = cmd(byteArrayOf(0x75), 3)
 
@@ -147,26 +187,5 @@ object Firmware {
         }
 
         fun readPage(len: Int) = cmd(byteArrayOf(0x74, (len shr 8).toByte(), (len and 0xFF).toByte(), 'F'.code.toByte()), len)
-
-        private fun read(n: Int, timeoutMs: Int): ByteArray {
-            val out = ByteArray(n)
-            var got = 0
-            val buf = ByteArray(256)
-            val end = System.currentTimeMillis() + timeoutMs
-            while (got < n && System.currentTimeMillis() < end) {
-                val c = port.read(buf, 50)
-                for (i in 0 until c) if (got < n) out[got++] = buf[i]
-            }
-            if (got < n) throw FlashException("Timeout ($got/$n bytes)")
-            return out
-        }
-
-        private fun drain() {
-            val b = ByteArray(64)
-            try {
-                while (port.read(b, 20) > 0) { }
-            } catch (_: Exception) {
-            }
-        }
     }
 }

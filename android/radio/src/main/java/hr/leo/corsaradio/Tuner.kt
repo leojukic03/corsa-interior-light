@@ -1,6 +1,7 @@
 package hr.leo.corsaradio
 
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
@@ -79,7 +80,28 @@ object Tuner {
     private val listeners = ArrayList<() -> Unit>()
     fun addListener(l: () -> Unit) { listeners += l }
     fun removeListener(l: () -> Unit) { listeners -= l }
-    private fun changed() = listeners.toList().forEach { it() }
+    private fun changed() {
+        session?.update(RadioTid.title(ps, freq, isAm), radioText, source == 1 && !off && freq != 0)
+        listeners.toList().forEach { it() }
+    }
+
+    // ---------------- TID preko Interior Lighta (medijska sesija + kratke poruke)
+
+    private var appCtx: Context? = null
+    private var session: RadioSession? = null
+    private var off = false        // radio ugasen tipkom natrag
+    private var bandKnown = false  // prvi band s MCU-a nije promjena
+
+    /** Kratka poruka na TID-u (2 s) preko Interior Lighta; bez njega se nista ne dogodi. */
+    private fun tidMessage(text: String) {
+        try {
+            appCtx?.sendBroadcast(
+                Intent("hr.leo.corsalight.TID_MESSAGE").setPackage("hr.leo.corsalight").putExtra("text", text)
+            )
+        } catch (e: Throwable) {
+            Log.w(TAG, "tidMessage", e)
+        }
+    }
 
     // ---------------- veza
 
@@ -118,6 +140,13 @@ object Tuner {
 
     fun open(ctx: Context) {
         if (link != null) return
+        appCtx = ctx.applicationContext
+        if (session == null) {
+            session = RadioSession(ctx.applicationContext).also {
+                it.onNext = { nextPreset(1) }
+                it.onPrevious = { nextPreset(-1) }
+            }
+        }
         if (prefs == null) {
             prefs = ctx.applicationContext.getSharedPreferences("radio", Context.MODE_PRIVATE)
             softAf = prefs?.getBoolean("softAf", true) ?: true
@@ -136,6 +165,8 @@ object Tuner {
 
     fun close() {
         main.removeCallbacks(tick)
+        session?.release()
+        session = null
         try { link?.close() } catch (e: Throwable) { Log.w(TAG, "close", e) }
         link = null
     }
@@ -153,6 +184,7 @@ object Tuner {
 
     /** Ekran radija je u prvom planu: uzmi zvuk i zatrazi cijelo stanje. */
     fun resume() {
+        off = false
         write(SERVICE, 1)
         requestSource()
         write(266, 255)     // verzija MCU-a
@@ -167,7 +199,11 @@ object Tuner {
     fun pause() = write(SERVICE, 129)
 
     /** Ugasi radio (otpusti izvor zvuka), kao tipka natrag u originalnoj aplikaciji. */
-    fun powerOff() = write(REQUEST_SOURCE, 192, 129)
+    fun powerOff() {
+        off = true
+        write(REQUEST_SOURCE, 192, 129)
+        changed()
+    }
 
     private var source = 0
     private fun requestSource() {
@@ -237,7 +273,11 @@ object Tuner {
                     local = arg2 and 8 != 0
                     scanning = arg2 and 128 != 0
                 }
-                1 -> band = arg2
+                1 -> {
+                    if (bandKnown && arg2 != band) tidMessage(RadioTid.band(arg2))
+                    bandKnown = true
+                    band = arg2
+                }
                 2 -> {
                     if (arg2 != freq) { pi = 0; piSince = 0; lostSince = 0 }
                     freq = arg2
@@ -394,6 +434,7 @@ object Tuner {
                 lostSince = 0
                 cooldownUntil = now + 10_000
                 afNote = "AF: " + format(origin) + " \u2192 " + format(freq)
+                tidMessage(RadioTid.af(freq))
                 log("AF ok ${origin} -> $freq PI ${String.format(Locale.US, "%04X", pi)}")
                 changed()
             } else if (now - candT >= CANDIDATE_MS) {

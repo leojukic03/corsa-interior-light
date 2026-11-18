@@ -11,8 +11,8 @@ android {
         applicationId = "hr.leo.corsaradio"
         minSdk = 21
         targetSdk = 33
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2"
     }
 
     buildTypes {
@@ -29,4 +29,8 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+}
+
+dependencies {
+    testImplementation("junit:junit:4.13.2")
 }

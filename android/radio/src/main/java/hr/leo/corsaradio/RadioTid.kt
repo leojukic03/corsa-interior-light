@@ -8,6 +8,7 @@ object RadioTid {
     fun title(ps: String, freq: Int, am: Boolean): String {
         val name = ps.trim()
         if (name.isNotEmpty()) return name
+        if (freq == 0) return ""  // tuner jos nije javio frekvenciju
         return if (am) "AM $freq" else "FM " + String.format(Locale.US, "%.2f", freq / 100f)
     }
 

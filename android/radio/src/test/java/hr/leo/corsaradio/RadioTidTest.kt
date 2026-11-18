@@ -22,4 +22,9 @@ class RadioTidTest {
         assertEquals("FM2", RadioTid.band(Tuner.FM2))
         assertEquals("AM", RadioTid.band(Tuner.AM))
     }
+
+    @Test
+    fun noTitleBeforeTunerReportsFrequency() {
+        assertEquals("", RadioTid.title("", 0, false))
+    }
 }

@@ -240,34 +240,13 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
         }
     }
 
-    /**
-     * Veza za snimac: cita izravno s porta (citac aplikacije je za to vrijeme zaustavljen).
-     * Svako citanje traje barem 300 ms: knjiznica gubi podatke kad bulkTransfer istekne bas dok
-     * paket stize (CommonUsbSerialPort.read), a s dugim timeoutom citanje istekne samo kad Arduino suti.
-     * Visak bajtova iz jednog paketa se cuva za sljedece citanje.
-     */
-    private fun wireFor(p: UsbSerialPort) = object : Firmware.Wire {
-        private val pending = ArrayDeque<Int>()
-        private val buf = ByteArray(256)
-
-        override fun setBaud(baud: Int) {
-            p.setParameters(baud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-        }
-
-        override fun setLines(on: Boolean) {
-            p.dtr = on
-            p.rts = on
-        }
-
-        override fun write(b: ByteArray) = p.write(b, 1000)
-
-        override fun read(timeoutMs: Long): Int? {
-            pending.removeFirstOrNull()?.let { return it }
-            val n = p.read(buf, maxOf(timeoutMs, 300L).toInt())
-            for (i in 0 until n) pending.addLast(buf[i].toInt() and 0xFF)
-            return pending.removeFirstOrNull()
-        }
-    }
+    /** Veza za snimac: izravno na port (citac aplikacije je za to vrijeme zaustavljen). */
+    private fun wireFor(p: UsbSerialPort) = Firmware.PortWire(
+        readPort = { buf, timeout -> p.read(buf, timeout) },
+        writePort = { b -> p.write(b, 1000) },
+        baud = { baud -> p.setParameters(baud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE) },
+        lines = { on -> p.dtr = on; p.rts = on },
+    )
 
     override fun onNewData(data: ByteArray) {
         for (b in data) {

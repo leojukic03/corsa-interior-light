@@ -144,4 +144,36 @@ class FirmwareTest {
         // 3.0.3 na headunitu: sync i potpis prolaze, stranica 0 pada na svakom pokusaju
         flashAndCheck(FakeUno(dropSecondPacket = true), 4096)
     }
+
+    /**
+     * Pravi port preko PortWire, kao na headunitu (trag iz 3.0.4): prvo citanje nakon svakog zapisa
+     * vrati 0 bajtova odmah, umjesto da ceka. Odgovor stigne tek u sljedecem citanju.
+     */
+    @Test
+    fun portReturnsEmptyReadRightAfterWrite() {
+        val uno = FakeUno()
+        var emptyNext = false
+        val wire = Firmware.PortWire(
+            readPort = { buf, timeout ->
+                if (emptyNext) {
+                    emptyNext = false
+                    0
+                } else {
+                    var n = 0
+                    val first = uno.read(timeout.toLong())
+                    if (first != null) {
+                        buf[n++] = first.toByte()
+                        while (n < 64) buf[n++] = (uno.read(2) ?: break).toByte()
+                    }
+                    n
+                }
+            },
+            writePort = { b -> uno.write(b); emptyNext = true },
+            baud = { uno.setBaud(it) },
+            lines = { uno.setLines(it) },
+        )
+        val img = image(4096)
+        assertTrue(Firmware.flash(wire, img, 4096) {})
+        assertArrayEquals(img.copyOf(4096), uno.flash.copyOf(4096))
+    }
 }

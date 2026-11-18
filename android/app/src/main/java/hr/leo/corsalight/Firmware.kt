@@ -59,6 +59,41 @@ object Firmware {
     }
 
     /**
+     * Wire preko pravog USB porta. Svako citanje porta traje barem 300 ms: knjiznica gubi podatke kad
+     * bulkTransfer istekne bas dok paket stize (CommonUsbSerialPort.read). Visak bajtova iz jednog
+     * paketa se cuva za sljedece citanje.
+     */
+    class PortWire(
+        private val readPort: (ByteArray, Int) -> Int,
+        private val writePort: (ByteArray) -> Unit,
+        private val baud: (Int) -> Unit,
+        private val lines: (Boolean) -> Unit,
+    ) : Wire {
+        private val pending = ArrayDeque<Int>()
+        private val buf = ByteArray(256)
+
+        override fun setBaud(baud: Int) = this.baud(baud)
+        override fun setLines(on: Boolean) = lines(on)
+        override fun write(b: ByteArray) = writePort(b)
+
+        /**
+         * Port na headunitu zna vratiti 0 bajtova odmah, bez cekanja (vidi trag iz 3.0.4:
+         * "TX 50 20 | RX -" nakon 1 ms). Prazno citanje zato NIJE istek: cita se dalje do roka.
+         */
+        override fun read(timeoutMs: Long): Int? {
+            pending.removeFirstOrNull()?.let { return it }
+            val end = System.currentTimeMillis() + timeoutMs
+            do {
+                val left = (end - System.currentTimeMillis()).coerceAtLeast(1)
+                val n = readPort(buf, maxOf(left, 300L).toInt())
+                for (i in 0 until n) pending.addLast(buf[i].toInt() and 0xFF)
+                pending.removeFirstOrNull()?.let { return it }
+            } while (System.currentTimeMillis() < end)
+            return null
+        }
+    }
+
+    /**
      * Snimi sliku na Arduino. Vraca true ako je provjera prosla. progress dobiva poruke za log.
      *
      * Zasto ovako (optiboot 4.4 + Uno 16U2, provjereno u izvornom kodu oba):

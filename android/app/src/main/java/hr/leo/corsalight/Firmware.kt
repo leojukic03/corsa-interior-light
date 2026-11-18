@@ -45,10 +45,9 @@ object Firmware {
     class FlashException(msg: String) : Exception(msg)
 
     /**
-     * Veza prema Arduinu za vrijeme snimanja. Bajtove NE cita sam snimac: knjiznica usb-serial
-     * gubi podatke kad se cita s kratkim timeoutom (do ~200 ms, vidi CommonUsbSerialPort.read),
-     * pa se izgubi ili prepolovi odgovor bootloadera i sve iza toga je "out of sync".
-     * Zato bajtove dostavlja stalni citac aplikacije (LinkService), a ovdje ih se samo uzima iz reda.
+     * Veza prema Arduinu za vrijeme snimanja (LinkService.wireFor). Knjiznica usb-serial gubi podatke
+     * kad citanje s kratkim timeoutom istekne bas dok paket stize, pa se odgovor bootloadera prepolovi
+     * i sve iza toga je "out of sync". Zato Wire cita s dugim timeoutom i cuva visak bajtova.
      */
     interface Wire {
         fun setBaud(baud: Int)
@@ -65,6 +64,7 @@ object Firmware {
      */
     fun flash(wire: Wire, image: ByteArray, size: Int, progress: (String) -> Unit): Boolean {
         val stk = Stk(wire)
+        val seen = StringBuilder()
         for (baud in intArrayOf(115200, 57600)) {  // Uno / novi Nano: 115200, stari Nano: 57600
             wire.setBaud(baud)
             resetIntoBootloader(wire)
@@ -93,8 +93,9 @@ object Firmware {
                 progress("Done: $size bytes written and verified")
                 return true
             }
+            seen.append(" $baud: ").append(stk.heard())
         }
-        throw FlashException("No answer from the Arduino bootloader")
+        throw FlashException("No answer from the Arduino bootloader.$seen")
     }
 
     /** Kao avrdude: DTR/RTS dolje, pa gore -> 16U2 / CH340 resetira ATmega u bootloader. */
@@ -128,6 +129,17 @@ object Firmware {
          * GET_SYNC dok bootloader ne odgovori, pa jos jednom na cisto: nakon prvog odgovora mogu
          * stici zakasnjeli odgovori na ranije pokusaje, a oni ne smiju zavrsiti u sljedecoj naredbi.
          */
+        private val heardBytes = ArrayList<Int>()
+        private var heardCount = 0
+
+        /** Sto je stiglo dok se cekao sync: broj bajtova i prvih 16 (za log). */
+        fun heard(): String {
+            val s = "$heardCount B" + if (heardBytes.isEmpty()) "" else " [" + heardBytes.joinToString(" ") { "%02X".format(it) } + "]"
+            heardBytes.clear()
+            heardCount = 0
+            return s
+        }
+
         fun sync(): Boolean {
             repeat(10) {
                 wire.write(byteArrayOf(0x30, EOP))
@@ -147,6 +159,8 @@ object Firmware {
                 val left = end - System.currentTimeMillis()
                 if (left <= 0) return false
                 val b = wire.read(left) ?: return false
+                heardCount++
+                if (heardBytes.size < 16) heardBytes.add(b)
                 if (prev == INSYNC && b == OK) return true
                 prev = b
             }

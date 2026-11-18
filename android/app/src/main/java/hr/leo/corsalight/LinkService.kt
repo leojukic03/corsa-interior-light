@@ -22,8 +22,6 @@ import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
 import com.hoho.android.usbserial.util.SerialInputOutputManager
 import java.util.concurrent.Executors
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.TimeUnit
 
 /**
  * Pozadinski servis: drzi USB vezu s Arduinom, prati glasnocu i salje naredbe.
@@ -163,8 +161,7 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
 
     private fun startIo(p: UsbSerialPort): SerialInputOutputManager {
         val m = SerialInputOutputManager(p, this)
-        // readTimeout 0 = blokirajuce citanje (UsbRequest). Kratki timeout u knjiznici gubi podatke,
-        // a to je rusilo snimanje Arduina. Citac radi i za vrijeme snimanja i puni flashRx.
+        m.readTimeout = 200  // da se citanje moze zaustaviti za snimanje Arduina
         m.start()
         return m
     }
@@ -191,7 +188,6 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
     fun updateFirmware() {
         val p = port
         if (p == null || flashing) return
-        flashRx.clear()
         flashing = true
         Hub.flashState = "Updating OAI module…"
         // TID ne smije dobiti reset usred poruke: Arduino pauzira TID 5 s
@@ -203,6 +199,9 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
             var ok = false
             try {
                 Thread.sleep(300)
+                io?.stop()
+                val until = System.currentTimeMillis() + 1500
+                while (io?.state != SerialInputOutputManager.State.STOPPED && System.currentTimeMillis() < until) Thread.sleep(20)
                 val (img, size) = Firmware.loadImage(this)
                 ok = Firmware.flash(wireFor(p), img, size) { msg -> handler.post { Hub.log("Firmware: $msg"); Hub.flashState = msg } }
             } catch (e: Exception) {
@@ -216,6 +215,7 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
                     flashing = false
                     Hub.flashState = ""
                     if (port === p) {
+                        io = startIo(p)
                         // novi kod se pali s welcome animacijom: onda mu posalji postavke
                         handler.postDelayed({ syncAll() }, if (ok) 2500 else 500)
                     }
@@ -240,24 +240,36 @@ class LinkService : Service(), SerialInputOutputManager.Listener {
         }
     }
 
-    /** Bajtovi s Arduina za snimac (dok traje snimanje ne idu u obicno citanje redaka). */
-    private val flashRx = LinkedBlockingQueue<Int>()
-
+    /**
+     * Veza za snimac: cita izravno s porta (citac aplikacije je za to vrijeme zaustavljen).
+     * Svako citanje traje barem 300 ms: knjiznica gubi podatke kad bulkTransfer istekne bas dok
+     * paket stize (CommonUsbSerialPort.read), a s dugim timeoutom citanje istekne samo kad Arduino suti.
+     * Visak bajtova iz jednog paketa se cuva za sljedece citanje.
+     */
     private fun wireFor(p: UsbSerialPort) = object : Firmware.Wire {
-        override fun setBaud(baud: Int) = p.setParameters(baud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+        private val pending = ArrayDeque<Int>()
+        private val buf = ByteArray(256)
+
+        override fun setBaud(baud: Int) {
+            p.setParameters(baud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+        }
+
         override fun setLines(on: Boolean) {
             p.dtr = on
             p.rts = on
         }
+
         override fun write(b: ByteArray) = p.write(b, 1000)
-        override fun read(timeoutMs: Long): Int? = flashRx.poll(timeoutMs, TimeUnit.MILLISECONDS)
+
+        override fun read(timeoutMs: Long): Int? {
+            pending.removeFirstOrNull()?.let { return it }
+            val n = p.read(buf, maxOf(timeoutMs, 300L).toInt())
+            for (i in 0 until n) pending.addLast(buf[i].toInt() and 0xFF)
+            return pending.removeFirstOrNull()
+        }
     }
 
     override fun onNewData(data: ByteArray) {
-        if (flashing) {
-            for (b in data) flashRx.offer(b.toInt() and 0xFF)
-            return
-        }
         for (b in data) {
             val c = (b.toInt() and 0xFF).toChar()
             when (c) {

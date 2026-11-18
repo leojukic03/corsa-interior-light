@@ -10,7 +10,14 @@ import java.util.concurrent.TimeUnit
  * Lazni Arduino Uno s optibootom (STK500v1) za test snimaca. Odgovori stizu u komadima, kao preko
  * USB-a, a prije bootloadera stari kod salje svoj tekst.
  */
-class FakeUno(private val strayAfterSync: ByteArray = ByteArray(0)) : Firmware.Wire {
+class FakeUno(
+    private val strayAfterSync: ByteArray = ByteArray(0),
+    /** Redni brojevi odgovora (od 0) koji se "izgube" na USB-u, kao na headunitu. */
+    private val lose: Set<Int> = emptySet(),
+) : Firmware.Wire {
+    private var replies = 0
+    /** Optiboot se resetira ako 1 s ne primi nista (watchdog). */
+    private var lastRx = 0L
     val flash = ByteArray(32768) { 0xFF.toByte() }
     private val rx = LinkedBlockingQueue<Int>()
     private val cmd = ArrayList<Int>()
@@ -37,6 +44,9 @@ class FakeUno(private val strayAfterSync: ByteArray = ByteArray(0)) : Firmware.W
     private fun reply(vararg b: Int) = b.forEach { rx.add(it and 0xFF) }
 
     override fun write(b: ByteArray) {
+        val now = System.currentTimeMillis()
+        if (inBoot && lastRx != 0L && now - lastRx > 1000) inBoot = false  // watchdog: natrag u stari kod
+        lastRx = now
         if (!inBoot) return
         for (x in b) {
             cmd.add(x.toInt() and 0xFF)
@@ -56,6 +66,17 @@ class FakeUno(private val strayAfterSync: ByteArray = ByteArray(0)) : Firmware.W
     }
 
     private fun handle() {
+        val n = replies++
+        if (n in lose) {  // odgovor se izgubi: posalji ga u prazno
+            val keep = ArrayList(rx)
+            handleInto()
+            rx.clear(); rx.addAll(keep)
+            return
+        }
+        handleInto()
+    }
+
+    private fun handleInto() {
         when (cmd[0]) {
             0x30 -> {
                 reply(0x14, 0x10)
@@ -98,5 +119,14 @@ class FirmwareTest {
         val img = image(4096)
         assertTrue(Firmware.flash(uno, img, 4096) {})
         assertArrayEquals(img.copyOf(4096), uno.flash.copyOf(4096))
+    }
+
+    @Test
+    fun recoversWhenRepliesGetLost() {
+        // kao 3.0.2 na headunitu: sync prode, a odgovor na potpis (i par kasnijih) se izgubi
+        val uno = FakeUno(lose = setOf(2, 3, 40, 41, 200))
+        val img = image(8192)
+        assertTrue(Firmware.flash(uno, img, 8192) {})
+        assertArrayEquals(img.copyOf(8192), uno.flash.copyOf(8192))
     }
 }

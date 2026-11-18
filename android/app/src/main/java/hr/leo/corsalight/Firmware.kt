@@ -70,27 +70,32 @@ object Firmware {
             resetIntoBootloader(wire)
             if (stk.sync()) {
                 progress("Bootloader found ($baud baud)")
-                val sig = stk.signature()
+                val sig = stk.retry("signature") { stk.signature() }
                 if (!sig.contentEquals(byteArrayOf(0x1E, 0x95.toByte(), 0x0F))) {
                     throw FlashException("Wrong chip signature: " + hex(sig))
                 }
-                stk.cmd(byteArrayOf(0x50))  // ENTER_PROGMODE
+                stk.retry("program mode") { stk.cmd(byteArrayOf(0x50)) }  // ENTER_PROGMODE
                 val pages = (size + PAGE - 1) / PAGE
                 for (p in 0 until pages) {
-                    stk.loadAddress(p * PAGE)
-                    stk.programPage(image, p * PAGE, PAGE)
+                    // adresa i stranica zajedno: ponavljanje uvijek pise na pravo mjesto
+                    stk.retry("page $p") {
+                        stk.loadAddress(p * PAGE)
+                        stk.programPage(image, p * PAGE, PAGE)
+                    }
                     if (p % 32 == 0) progress("Writing ${p * 100 / pages} %")
                 }
                 progress("Verifying…")
                 for (p in 0 until pages) {
-                    stk.loadAddress(p * PAGE)
-                    val back = stk.readPage(PAGE)
+                    val back = stk.retry("verify $p") {
+                        stk.loadAddress(p * PAGE)
+                        stk.readPage(PAGE)
+                    }
                     for (i in 0 until PAGE) {
                         if (back[i] != image[p * PAGE + i]) throw FlashException("Verify failed at ${p * PAGE + i}")
                     }
                 }
-                stk.cmd(byteArrayOf(0x51))  // LEAVE_PROGMODE: Arduino krece s novim kodom
-                progress("Done: $size bytes written and verified")
+                stk.retry("leave") { stk.cmd(byteArrayOf(0x51)) }  // LEAVE_PROGMODE: Arduino krece s novim kodom
+                progress("Done: $size bytes written and verified" + if (stk.retries > 0) " (${stk.retries} retries)" else "")
                 return true
             }
             seen.append(" $baud: ").append(stk.heard())
@@ -124,6 +129,7 @@ object Firmware {
         private val INSYNC = 0x14
         private val NOSYNC = 0x15
         private val OK = 0x10
+        private val TIMEOUT = 400L  // ms po bajtu odgovora, ispod optibootovog watchdoga (1 s)
 
         /**
          * GET_SYNC dok bootloader ne odgovori, pa jos jednom na cisto: nakon prvog odgovora mogu
@@ -166,18 +172,51 @@ object Firmware {
             }
         }
 
+        var retries = 0
+
+        /**
+         * Odgovori se na nekim headunitima povremeno izgube na USB-u. Tada: ponovni sync pa ista
+         * naredba jos jednom (kao avrdude). Sve cekanje je kratko (ispod 1 s), jer se optiboot
+         * sam vrati u stari kod ako sekundu ne primi nista.
+         */
+        fun <T> retry(what: String, block: () -> T): T {
+            var last: FlashException? = null
+            repeat(6) {
+                try {
+                    return block()
+                } catch (e: FlashException) {
+                    last = e
+                    retries++
+                    if (!resync()) throw FlashException("Lost the bootloader at $what: ${e.message}")
+                }
+            }
+            throw FlashException("Gave up at $what after ${retries} retries: ${last?.message}")
+        }
+
+        private fun resync(): Boolean {
+            repeat(5) {
+                wire.write(byteArrayOf(0x30, EOP))
+                if (expectSync(TIMEOUT)) {
+                    // zakasnjeli ostaci starog odgovora: kratko pocisti
+                    drain(wire, 40)
+                    return true
+                }
+            }
+            return false
+        }
+
         fun cmd(body: ByteArray, answer: Int = 0): ByteArray {
             wire.write(body + EOP)
             // zalutali bajtovi prije INSYNC se preskacu (najvise 16), NOSYNC znaci da je naredba odbijena
             var skipped = 0
             while (true) {
-                val b = next(1000)
+                val b = next(TIMEOUT)
                 if (b == INSYNC) break
                 if (b == NOSYNC) throw FlashException("Bootloader said NOSYNC to %02X".format(body[0]))
                 if (++skipped > 16) throw FlashException("Bootloader out of sync (no INSYNC for %02X)".format(body[0]))
             }
-            val out = ByteArray(answer) { next(1000).toByte() }
-            val last = next(1000)
+            val out = ByteArray(answer) { next(TIMEOUT).toByte() }
+            val last = next(TIMEOUT)
             if (last != OK) {
                 throw FlashException("Bootloader out of sync: %02X answered [%s] then %02X".format(body[0], hex(out), last))
             }

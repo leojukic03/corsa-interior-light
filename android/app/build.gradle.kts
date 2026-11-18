@@ -11,8 +11,8 @@ android {
         applicationId = "hr.leo.corsalight"
         minSdk = 21
         targetSdk = 33
-        versionCode = 16
-        versionName = "3.0.3"
+        versionCode = 17
+        versionName = "3.0.4"
     }
 
     buildTypes {
